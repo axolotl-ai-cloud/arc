@@ -169,7 +169,7 @@ class DefaultSessionPolicy:
                 if s.user_id == user_id
             )
             if user_sessions >= _MAX_SESSIONS_PER_USER:
-                return (False, f"session limit reached ({_MAX_SESSIONS_PER_USER} per token)")
+                return (False, f"session limit reached ({user_sessions} / {_MAX_SESSIONS_PER_USER} per token)")
 
         return (True, None)
 

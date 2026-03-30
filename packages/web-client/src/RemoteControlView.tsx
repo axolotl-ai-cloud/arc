@@ -171,27 +171,45 @@ export function RemoteControlView({ sessionId, relayWsUrl, sessionSecret }: Prop
           setAgentName(envelope.session.agentName ?? "");
           // Initialize E2E key if session uses session_secret encryption
           if (envelope.session.e2e === "session_secret") {
-            try {
-              e2eKeyRef.current = await deriveViewerKey(sessionSecret, sessionId);
-              setE2eActive(true);
-              // Decrypt any traces that arrived before key was ready
-              if (pendingEncryptedRef.current.length > 0) {
-                const pending = pendingEncryptedRef.current.splice(0);
-                const decrypted: TraceEntry[] = [];
-                for (const p of pending) {
-                  try {
-                    const event = await decryptPayload(e2eKeyRef.current, p.event as {ciphertext: string; nonce: string}, p.sessionId);
-                    decrypted.push(event as TraceEntry);
-                  } catch {
-                    // skip undecryptable (wrong key, old session)
+            if (!crypto?.subtle) {
+              // crypto.subtle is only available in secure contexts (https:// or localhost).
+              // Accessing the viewer via http://192.168.x.x or any plain-HTTP LAN address
+              // will land here — traces will remain encrypted and unreadable.
+              setTraces((prev) => [
+                ...prev,
+                {
+                  id: "e2e-insecure-context",
+                  timestamp: new Date().toISOString(),
+                  type: "error",
+                  code: "E2E",
+                  message:
+                    "E2E decryption unavailable: Web Crypto requires a secure context. " +
+                    "Access this viewer over https:// or http://localhost instead of a plain-HTTP LAN address.",
+                },
+              ]);
+            } else {
+              try {
+                e2eKeyRef.current = await deriveViewerKey(sessionSecret, sessionId);
+                setE2eActive(true);
+                // Decrypt any traces that arrived before key was ready
+                if (pendingEncryptedRef.current.length > 0) {
+                  const pending = pendingEncryptedRef.current.splice(0);
+                  const decrypted: TraceEntry[] = [];
+                  for (const p of pending) {
+                    try {
+                      const event = await decryptPayload(e2eKeyRef.current, p.event as {ciphertext: string; nonce: string}, p.sessionId);
+                      decrypted.push(event as TraceEntry);
+                    } catch {
+                      // skip undecryptable (wrong key, old session)
+                    }
+                  }
+                  if (decrypted.length > 0) {
+                    setTraces((prev) => [...prev, ...decrypted]);
                   }
                 }
-                if (decrypted.length > 0) {
-                  setTraces((prev) => [...prev, ...decrypted]);
-                }
+              } catch (err) {
+                console.error("[e2e] Failed to derive key:", err);
               }
-            } catch (err) {
-              console.error("[e2e] Failed to derive key:", err);
             }
           }
         }

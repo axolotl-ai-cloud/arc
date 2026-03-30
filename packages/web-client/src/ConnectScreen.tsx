@@ -29,6 +29,17 @@ export function ConnectScreen({ onConnect }: Props) {
     setTesting(true);
     setError(null);
 
+    // Detect mixed content: HTTPS viewer → HTTP relay is blocked by browsers
+    const relayIsHttp = trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("ws://");
+    if (window.location.protocol === "https:" && relayIsHttp) {
+      setError(
+        "Mixed content blocked: this viewer is served over HTTPS but the relay URL is HTTP. " +
+        "Open the relay's built-in viewer directly (e.g. http://192.168.x.x:8600/viewer) instead.",
+      );
+      setTesting(false);
+      return;
+    }
+
     try {
       // Quick health check (no auth needed for /health)
       const base = trimmedUrl.replace(/^wss?:\/\//, (m) =>

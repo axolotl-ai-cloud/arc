@@ -169,6 +169,26 @@ class ArcRelay:
         config = _load_arc_config()
         self.e2e_enabled = config.get("e2e", False)
 
+        # Warn if E2E is enabled but the viewer URL will be served over plain HTTP.
+        # crypto.subtle (required for decryption) is unavailable in insecure contexts.
+        if self.e2e_enabled:
+            viewer_base = _get_viewer_base()
+            relay_http = relay_url.replace("ws://", "http://").replace("wss://", "https://").replace("/ws", "")
+            effective_viewer = viewer_base or relay_http
+            is_secure = (
+                effective_viewer.startswith("https://")
+                or effective_viewer.startswith("http://localhost")
+                or effective_viewer.startswith("http://127.0.0.1")
+            )
+            if not is_secure:
+                log.warning(
+                    "ARC E2E encryption is enabled, but the viewer URL (%s) is not a secure context. "
+                    "Traces will be encrypted but the viewer cannot decrypt them. "
+                    "Use https:// or http://localhost, or disable E2E with `arc setup`.",
+                    effective_viewer,
+                )
+                self.e2e_enabled = False
+
         session_info = {
             "sessionId": self.session_id,
             "agentFramework": "hermes",

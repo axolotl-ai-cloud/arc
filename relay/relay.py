@@ -24,7 +24,8 @@ Environment variables (used by the default OSS configuration):
     MAX_SESSIONS            — max concurrent sessions (default: 100)
     MAX_VIEWERS_PER_SESSION — max viewers per session (default: 10)
     MAX_MESSAGE_SIZE        — max WebSocket message size in bytes (default: 1MB)
-    SESSION_TTL_HOURS       — hours before idle sessions are cleaned up (default: 24)
+    SESSION_TTL_HOURS             — hours before idle sessions are cleaned up (default: 24)
+    AGENT_DISCONNECTED_TTL_MINUTES — minutes to keep a session after agent disconnects (default: 5)
     ALLOWED_ORIGINS         — comma-separated allowed origins for CORS (default: "*")
     AGENT_TOKEN             — REQUIRED. Token agents present to register sessions.
                               If not set, the server auto-generates one and logs it.
@@ -73,6 +74,8 @@ MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "100"))
 MAX_VIEWERS_PER_SESSION = int(os.environ.get("MAX_VIEWERS_PER_SESSION", "10"))
 MAX_MESSAGE_SIZE = int(os.environ.get("MAX_MESSAGE_SIZE", str(1024 * 1024)))
 SESSION_TTL_HOURS = int(os.environ.get("SESSION_TTL_HOURS", "24"))
+# How long to keep a session alive after its agent disconnects (0 = clean up immediately on next pass)
+AGENT_DISCONNECTED_TTL_MINUTES = int(os.environ.get("AGENT_DISCONNECTED_TTL_MINUTES", "5"))
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 REQUIRE_TLS = os.environ.get("REQUIRE_TLS", "false").lower() == "true"
 
@@ -227,18 +230,36 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
 
     async def cleanup_expired_sessions():
         while True:
-            await asyncio.sleep(300)
+            await asyncio.sleep(60)
             try:
                 ttl_seconds = SESSION_TTL_HOURS * 3600
                 expired = await config.store.get_expired(ttl_seconds)
             except Exception as exc:
                 log.error("cleanup: failed to get expired sessions: %s", exc)
                 continue
+
+            # Also expire sessions whose agent has disconnected
+            if AGENT_DISCONNECTED_TTL_MINUTES >= 0:
+                disconnected_ttl = AGENT_DISCONNECTED_TTL_MINUTES * 60
+                now = time.time()
+                try:
+                    all_sessions = await config.store.list_for_tenant(tenant_id=None)
+                    for s in all_sessions:
+                        if s.info.session_id in expired:
+                            continue
+                        agent_gone = s.agent_ws.client_state == WebSocketState.DISCONNECTED
+                        if agent_gone and (now - s.last_activity) >= disconnected_ttl:
+                            expired.append(s.info.session_id)
+                except Exception as exc:
+                    log.error("cleanup: failed to check disconnected sessions: %s", exc)
+
             for sid in expired:
                 session = await config.store.remove(sid)
                 if session:
-                    log.info("session expired: %s (idle %dh)", sid, SESSION_TTL_HOURS)
-                    await config.hooks.on_session_destroyed(sid, session.user_id, session.tenant_id, "expired")
+                    agent_gone = session.agent_ws.client_state == WebSocketState.DISCONNECTED
+                    reason = "agent_disconnected" if agent_gone else "expired"
+                    log.info("session cleaned up: %s (%s)", sid, reason)
+                    await config.hooks.on_session_destroyed(sid, session.user_id, session.tenant_id, reason)
                     try:
                         await session.agent_ws.close(code=4002, reason="session expired")
                     except Exception:
@@ -309,7 +330,46 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
         else:
             return []
 
-        return [s.info.to_dict() for s in all_sessions]
+        def session_dict(s: Session) -> dict:
+            d = s.info.to_dict()
+            d["agentConnected"] = s.agent_ws.client_state != WebSocketState.DISCONNECTED
+            d["viewerCount"] = len(s.viewers)
+            d["lastActivity"] = s.last_activity
+            return d
+
+        return [session_dict(s) for s in all_sessions]
+
+    @relay_app.delete("/sessions/{session_id}")
+    async def delete_session(session_id: str, request: Request, authorization: str | None = Header(None)):
+        ip = get_client_ip(request=request)
+        if not check_rate_limit(ip, RATE_LIMIT_MAX_HTTP):
+            return JSONResponse({"error": "rate limited"}, status_code=429)
+
+        token = extract_bearer_token(authorization)
+        headers = {k: v for k, v in request.headers.items()}
+        auth_result = await config.auth.authenticate_agent(token, headers)
+        if not auth_result.authenticated:
+            return JSONResponse(
+                {"error": auth_result.error or "unauthorized"},
+                status_code=401,
+            )
+
+        session = await config.store.get(session_id)
+        if not session:
+            return JSONResponse({"error": "session not found"}, status_code=404)
+
+        # Only allow deleting sessions owned by this user/tenant
+        if auth_result.user_id and session.user_id != auth_result.user_id:
+            return JSONResponse({"error": "unauthorized"}, status_code=403)
+        if auth_result.tenant_id and session.tenant_id != auth_result.tenant_id:
+            return JSONResponse({"error": "unauthorized"}, status_code=403)
+
+        await config.store.remove(session_id)
+        await config.hooks.on_session_destroyed(
+            session_id, session.user_id, session.tenant_id, "deleted_by_user"
+        )
+        log.info("session deleted by user: %s", session_id)
+        return {"deleted": session_id}
 
     # ── Web Viewer (static SPA) ──────────────────────────────────
 
@@ -726,7 +786,8 @@ def main():
     log.info("Starting relay server on :%d", PORT)
     log.info("WebSocket: ws://localhost:%d/ws", PORT)
     log.info("HTTP API:  http://localhost:%d/sessions", PORT)
-    log.info("Max sessions: %d, Max trace log: %d, Session TTL: %dh", MAX_SESSIONS, MAX_TRACE_LOG, SESSION_TTL_HOURS)
+    log.info("Max sessions: %d, Max trace log: %d, Session TTL: %dh, Disconnected TTL: %dm",
+             MAX_SESSIONS, MAX_TRACE_LOG, SESSION_TTL_HOURS, AGENT_DISCONNECTED_TTL_MINUTES)
     if _AGENT_TOKEN_GENERATED:
         log.info("=" * 60)
         log.info("  AGENT_TOKEN (auto-generated): %s", AGENT_TOKEN)

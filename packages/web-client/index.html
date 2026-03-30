@@ -6,14 +6,25 @@
     <title>Agent Remote Control</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
+      html {
+        /* dvh accounts for iOS Safari's collapsing address bar */
+        height: -webkit-fill-available;
+        height: 100dvh;
+      }
       body {
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", system-ui, sans-serif;
         background: #0a0a0a;
         color: #e5e5e5;
-        height: 100vh;
-        overflow: hidden;
+        min-height: -webkit-fill-available;
+        min-height: 100dvh;
+        /* let iOS scroll to expose the input when keyboard appears */
+        overflow-y: auto;
+        overflow-x: hidden;
       }
-      #root { height: 100%; }
+      #root {
+        height: -webkit-fill-available;
+        height: 100dvh;
+      }
     </style>
   </head>
   <body>
