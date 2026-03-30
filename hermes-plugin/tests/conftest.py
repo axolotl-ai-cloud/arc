@@ -23,7 +23,6 @@ for _mod in list(sys.modules):
         del sys.modules[_mod]
 
 if True:  # Always use mock for consistent testing
-    import os as _os
 
     class _FakeAESGCM:
         def __init__(self, key):
@@ -32,12 +31,12 @@ if True:  # Always use mock for consistent testing
         def encrypt(self, nonce, data, aad):
             # Simple XOR for testing (NOT real encryption)
             key_bytes = self._key * (len(data) // len(self._key) + 1)
-            return bytes(a ^ b for a, b in zip(data, key_bytes[: len(data)])) + nonce
+            return bytes(a ^ b for a, b in zip(data, key_bytes[: len(data)], strict=False)) + nonce
 
         def decrypt(self, nonce, data, aad):
             ct = data[: -len(nonce)]
             key_bytes = self._key * (len(ct) // len(self._key) + 1)
-            return bytes(a ^ b for a, b in zip(ct, key_bytes[: len(ct)]))
+            return bytes(a ^ b for a, b in zip(ct, key_bytes[: len(ct)], strict=False))
 
     _aead_mod = MagicMock()
     _aead_mod.AESGCM = _FakeAESGCM

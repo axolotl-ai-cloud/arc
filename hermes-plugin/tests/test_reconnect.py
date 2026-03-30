@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -76,7 +75,6 @@ class TestArcRelayReconnect:
     def _create_relay(self):
         """Import and create a fresh ArcRelay instance."""
         # Import here to avoid module-level side effects
-        import importlib
         import sys
 
         # Remove cached module to get fresh state

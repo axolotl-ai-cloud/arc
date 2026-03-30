@@ -15,8 +15,8 @@ from __future__ import annotations
 
 # Module-level diagnostic — writes before anything else loads
 try:
-    from pathlib import Path as _P
     import time as _t
+    from pathlib import Path as _P
 
     (_P.home() / ".arc").mkdir(exist_ok=True)
     (_P.home() / ".arc" / "plugin.log").open("a").write(
@@ -371,8 +371,7 @@ class ArcRelay:
                     if viewer_base:
                         base = viewer_base.rstrip("/")
                         self.viewer_url = (
-                            f"{base}?relay={relay_http}"
-                            f"&session={session_info['sessionId']}&s={self.viewer_pin}"
+                            f"{base}?relay={relay_http}&session={session_info['sessionId']}&s={self.viewer_pin}"
                         )
                     else:
                         self.viewer_url = f"{relay_http}/viewer?session={session_info['sessionId']}&s={self.viewer_pin}"
