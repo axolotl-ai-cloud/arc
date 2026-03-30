@@ -24,8 +24,9 @@ function printUsage(): void {
   Usage:
     arc setup [options]    Configure relay URL, token, and framework
     arc config [options]   Get or set individual config values
-    arc sessions           List your active sessions
-    arc sessions --clear   Close all your active sessions
+    arc sessions                    List your sessions (shows agent/viewer status)
+    arc sessions --clear            Close all your sessions
+    arc sessions --clear --inactive Close only sessions with no active agent
     arc install-skill      Install /remote-control skill for your framework
     arc update             Update ARC and reinstall skills
     arc status             Show current configuration
@@ -245,36 +246,54 @@ async function main(): Promise<void> {
         console.error(`Failed to list sessions: HTTP ${res.status}`);
         process.exit(1);
       }
-      const sessions = await res.json() as Array<{ sessionId: string; agentName?: string; createdAt?: string; lastActivity?: number }>;
+      const sessions = await res.json() as Array<{
+        sessionId: string;
+        agentName?: string;
+        lastActivity?: number;
+        agentConnected?: boolean;
+        viewerCount?: number;
+      }>;
 
       if (sessions.length === 0) {
         console.log("No active sessions.");
         break;
       }
 
-      console.log(`\n  Active sessions (${sessions.length}):\n`);
+      console.log(`\n  Sessions (${sessions.length}):\n`);
       for (const s of sessions) {
         const age = s.lastActivity ? Math.round((Date.now() / 1000 - s.lastActivity) / 60) + "m ago" : "";
-        console.log(`    ${s.sessionId}  ${s.agentName || ""}  ${age}`);
+        const agentStatus = s.agentConnected === false ? "disconnected" : "connected";
+        const viewers = s.viewerCount ? `${s.viewerCount} viewer(s)` : "no viewers";
+        console.log(`    ${s.sessionId}  ${s.agentName || ""}  [agent: ${agentStatus}] [${viewers}]  ${age}`);
       }
       console.log("");
 
+      const disconnected = sessions.filter(s => s.agentConnected === false);
+
       if (opts["clear"]) {
-        console.log("  Closing all sessions...");
-        for (const s of sessions) {
-          const del = await fetch(`${relayHttpUrl}/sessions/${s.sessionId}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${config.agentToken}` },
-          });
-          if (del.ok) {
-            console.log(`  ✓ Closed ${s.sessionId}`);
-          } else {
-            console.log(`  ✗ Failed to close ${s.sessionId}: HTTP ${del.status}`);
+        const toClear = opts["inactive"] ? disconnected : sessions;
+        if (toClear.length === 0) {
+          console.log("  No sessions to close.");
+        } else {
+          console.log(`  Closing ${toClear.length} session(s)...`);
+          for (const s of toClear) {
+            const del = await fetch(`${relayHttpUrl}/sessions/${s.sessionId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${config.agentToken}` },
+            });
+            if (del.ok) {
+              console.log(`  ✓ Closed ${s.sessionId}`);
+            } else {
+              console.log(`  ✗ Failed to close ${s.sessionId}: HTTP ${del.status}`);
+            }
           }
         }
         console.log("");
       } else {
-        console.log("  Run `arc sessions --clear` to close all sessions.\n");
+        const hints = ["Run `arc sessions --clear` to close all sessions."];
+        if (disconnected.length > 0)
+          hints.push(`Or `arc sessions --clear --inactive` to close only the ${disconnected.length} disconnected one(s).`);
+        console.log(`  ${hints.join("\n  ")}\n`);
       }
       break;
     }

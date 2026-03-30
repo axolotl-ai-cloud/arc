@@ -448,7 +448,8 @@ To stop, call \`arc_stop_session\`.
 - If the error mentions "websocket-client not installed", run:
   \`pip install websocket-client\` (must be in the same Python environment as Hermes)
 - If the error mentions "session limit reached", the user has hit the per-token session cap.
-  Tell them to run: \`arc sessions --clear\` to close all existing sessions, then retry.
+  Tell them to run: \`arc sessions --clear --inactive\` to close disconnected sessions and free up slots.
+  If that doesn't free a slot (all sessions show agent: connected), tell them to run \`arc sessions --clear\`.
 - If connection fails, the relay may not be running or the token is invalid.
   Tell the user: \`arc setup\`
 

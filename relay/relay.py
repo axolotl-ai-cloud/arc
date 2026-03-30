@@ -330,7 +330,14 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
         else:
             return []
 
-        return [s.info.to_dict() for s in all_sessions]
+        def session_dict(s: Session) -> dict:
+            d = s.info.to_dict()
+            d["agentConnected"] = s.agent_ws.client_state != WebSocketState.DISCONNECTED
+            d["viewerCount"] = len(s.viewers)
+            d["lastActivity"] = s.last_activity
+            return d
+
+        return [session_dict(s) for s in all_sessions]
 
     @relay_app.delete("/sessions/{session_id}")
     async def delete_session(session_id: str, request: Request, authorization: str | None = Header(None)):
