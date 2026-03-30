@@ -10,10 +10,14 @@
  *   arc status             Show current configuration
  */
 
+import { createRequire } from "module";
 import { loadConfig, saveConfig, configExists, getConfigPath } from "./config.js";
 import { connect } from "./connect.js";
 import { runSetup } from "./setup.js";
 import { installSkill, detectFramework } from "./skill-installer.js";
+
+const _require = createRequire(import.meta.url);
+const { version } = _require("../package.json") as { version: string };
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -295,6 +299,12 @@ async function main(): Promise<void> {
           hints.push("Or `arc sessions --clear --inactive` to close only the " + disconnected.length + " disconnected one(s).");
         console.log(`  ${hints.join("\n  ")}\n`);
       }
+      break;
+    }
+
+    case "--version":
+    case "-V": {
+      console.log(version);
       break;
     }
 

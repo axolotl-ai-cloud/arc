@@ -161,12 +161,16 @@ export function RemoteControlView({ sessionId, relayWsUrl, sessionSecret }: Prop
 
         if (envelope.kind === "register" && envelope.session) {
           // Successful subscribe — reset reconnect state
+          const isReconnect = reconnectAttemptRef.current > 0;
           reconnectAttemptRef.current = 0;
           sessionErrorRef.current = false;
           setStatus("idle");
           setConnected(true);
-          // Clear any previous RELAY error traces
-          setTraces((prev) => prev.filter(t => !((t.code as string) === "RELAY")));
+          // On reconnect, clear all traces — relay will replay its full history
+          // so keeping existing traces would cause duplicates.
+          if (isReconnect) {
+            setTraces([]);
+          }
           setFramework(envelope.session.agentFramework);
           setAgentName(envelope.session.agentName ?? "");
           // Initialize E2E key if session uses session_secret encryption
