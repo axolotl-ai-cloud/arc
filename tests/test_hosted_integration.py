@@ -18,12 +18,12 @@ from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-
 from hosted.backend.auth import WorkOSAuthProvider, hash_api_key
 from hosted.backend.hooks import BillingLifecycleHooks
 from hosted.backend.policy import StripePlanPolicy
 from hosted.backend.store import RedisSessionStore
+from httpx import ASGITransport, AsyncClient
+
 from relay.defaults import InMemorySessionStore
 from relay.models import Session, SessionInfo
 from relay.protocols import AuthProvider, AuthResult, LifecycleHooks, SessionPolicy, SessionStore
