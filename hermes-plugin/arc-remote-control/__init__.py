@@ -154,6 +154,16 @@ class ArcRelay:
         if self.connected:
             return {"status": "already_connected", "viewer_url": self.viewer_url}
 
+        # If a reconnect thread is already running (mid-backoff between attempts),
+        # stop it before starting fresh. Otherwise start() would spawn a second
+        # thread with a new session ID, leaving two sessions registered with the
+        # relay — the viewer URL would point to the first while traces go to the
+        # second.
+        if self._thread and self._thread.is_alive():
+            self._stop.set()
+            # Daemon thread — no join needed. Clear the stop flag below for
+            # the new thread.
+
         try:
             import websocket  # noqa: F401
         except ImportError:
