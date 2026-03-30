@@ -52,12 +52,13 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @axolotlai/arc-adapter-deepagent
-        run: npm publish --workspace=packages/adapter-deepagent --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # TODO: uncomment when adapters are ready
+      # - name: Publish @axolotlai/arc-adapter-deepagent
+      #   run: npm publish --workspace=packages/adapter-deepagent --access public
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @axolotlai/arc-adapter-openclaw
-        run: npm publish --workspace=packages/adapter-openclaw --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # - name: Publish @axolotlai/arc-adapter-openclaw
+      #   run: npm publish --workspace=packages/adapter-openclaw --access public
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

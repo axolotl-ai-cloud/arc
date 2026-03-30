@@ -1,6 +1,7 @@
 {
   "name": "@axolotlai/arc-web-client",
   "version": "0.1.0",
+  "private": true,
   "description": "Browser-based remote control chat interface",
   "license": "MIT",
   "repository": {
