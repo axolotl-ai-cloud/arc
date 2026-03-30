@@ -1,6 +1,6 @@
 # ARC — Agent Remote Control
 
-Universal remote control for AI agent frameworks. Connect any agent to a browser-based interface for real-time monitoring, interaction, and remote command injection.
+Universal remote control for AI agent frameworks. Connect any agent to a browser-based interface for real-time monitoring and remote interaction.
 
 ## Agent Support
 
