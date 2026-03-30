@@ -9,7 +9,7 @@
  *   - Generic: .claude/skills/remote-control/SKILL.md (Claude Code compatible)
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, cpSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, cpSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -276,19 +276,24 @@ function installHermesSkill(_cwd: string): InstallResult {
       : null;
 
   if (pluginSource) {
-    mkdirSync(pluginTarget, { recursive: true });
     const isRepo = pluginSource === repoPluginSource;
 
+    // Repo checkout: create a symlink for live updates (first install only)
     if (isRepo && !existsSync(pluginTarget)) {
-      // Repo checkout: symlink for live updates during development
       try {
         symlinkSync(pluginSource, pluginTarget);
       } catch {
         // Fall through to copy
       }
     }
-    // Copy plugin files (npm install or symlink failed)
-    if (!existsSync(join(pluginTarget, "__init__.py"))) {
+
+    // If target is a symlink (live repo checkout), skip copy — changes are live
+    const isSymlink = existsSync(pluginTarget) &&
+      (() => { try { return lstatSync(pluginTarget).isSymbolicLink(); } catch { return false; } })();
+
+    if (!isSymlink) {
+      // Always copy/overwrite plugin files so reinstalls pick up latest code
+      mkdirSync(pluginTarget, { recursive: true });
       try {
         cpSync(pluginSource, pluginTarget, { recursive: true });
       } catch {

@@ -5,9 +5,13 @@ import { ConnectScreen } from "./ConnectScreen";
 import type { RelayConfig } from "./ConnectScreen";
 
 /** Parse URL query params for direct-link auto-connect. */
-function getUrlParams(): { session: string | null; secret: string | null } {
+function getUrlParams(): { relay: string | null; session: string | null; secret: string | null } {
   const params = new URLSearchParams(window.location.search);
-  return { session: params.get("session"), secret: params.get("s") || params.get("secret") };
+  return {
+    relay: params.get("relay"),
+    session: params.get("session"),
+    secret: params.get("s") || params.get("secret"),
+  };
 }
 
 const _urlParams = getUrlParams();
@@ -35,12 +39,14 @@ function deriveUrls(input: string): { http: string; ws: string } {
  * This prevents XSS from extracting stored secrets.
  */
 export function App() {
-  // Auto-connect from URL query params: ?session=...&secret=...
-  // Initialize state directly (not in useEffect) so we skip intermediate screens.
+  // Auto-connect from URL query params: ?session=...&s=...&relay=...
+  // ?relay= is used when an external viewer (e.g. GitHub Pages) receives a deep link
+  // from a remote relay. Initialize state directly to skip intermediate screens.
   const isDirectLink = Boolean(_urlParams.session && _urlParams.secret);
   const [config, setConfig] = useState<RelayConfig | null>(() => {
     if (isDirectLink) {
-      return { url: window.location.origin, sessionSecret: _urlParams.secret! };
+      const relayUrl = _urlParams.relay || window.location.origin;
+      return { url: relayUrl, sessionSecret: _urlParams.secret! };
     }
     return null;
   });

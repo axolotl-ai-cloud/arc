@@ -139,8 +139,15 @@ class InMemorySessionStore:
 # ─── Session Policy ─────────────────────────────────────────────────
 
 
+_MAX_SESSIONS_PER_USER = int(os.environ.get("MAX_SESSIONS_PER_USER", "0"))  # 0 = unlimited
+
+
 class DefaultSessionPolicy:
-    """OSS default: global session cap, no per-user/tenant limits."""
+    """OSS default: global session cap + optional per-user cap.
+
+    Per-user limit is active when MAX_SESSIONS_PER_USER > 0.
+    This is used by the beta relay to cap each token at 5 sessions.
+    """
 
     def __init__(self, max_sessions: int, store: Any):
         self._max_sessions = max_sessions
@@ -155,6 +162,15 @@ class DefaultSessionPolicy:
         total = await self._store.count()
         if total >= self._max_sessions:
             return (False, f"max sessions reached ({self._max_sessions})")
+
+        if _MAX_SESSIONS_PER_USER > 0 and user_id is not None:
+            user_sessions = sum(
+                1 for s in (await self._store.list_for_tenant())
+                if s.user_id == user_id
+            )
+            if user_sessions >= _MAX_SESSIONS_PER_USER:
+                return (False, f"session limit reached ({_MAX_SESSIONS_PER_USER} per token)")
+
         return (True, None)
 
     def max_sessions_for_tenant(

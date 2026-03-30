@@ -117,9 +117,42 @@ Open `http://localhost:8600/viewer` to access the web viewer (if web-client is b
 
 ```bash
 arc setup [--hermes|--self-hosted]  # Configure relay URL, token, framework
+arc config [--viewer|--relay|...]   # Get or set individual config values
 arc update                         # Pull, rebuild, reinstall skills
 arc install-skill                  # Install /remote-control skill
 arc status                         # Show current configuration
+```
+
+## Choosing a Viewer
+
+By default, viewer links point to the viewer bundled into your relay server — the same built-in React app served at `/viewer` on whatever relay you're connected to. This is the simplest setup and requires no extra configuration.
+
+There are two reasons you might want a different viewer URL:
+
+**Use the OSS viewer on GitHub Pages** — useful if you want to verify the viewer source code independently of the relay operator. The viewer is deployed directly from this repo via GitHub Actions and can be inspected at any commit:
+```bash
+arc config --viewer https://axolotl-ai-cloud.github.io/arc
+# When a session starts: https://axolotl-ai-cloud.github.io/arc?relay=https://arc-beta.axolotl.ai&session=...&s=...
+```
+
+**Use a locally running viewer** — useful when developing the web client or running fully air-gapped:
+```bash
+# In one terminal: start the dev viewer
+npm run dev:viewer   # serves at http://localhost:5173
+
+# In another terminal: point arc at it
+arc config --viewer http://localhost:5173
+# When a session starts: http://localhost:5173?relay=http://localhost:8600&session=...&s=...
+```
+
+Reset to the default relay-bundled viewer at any time:
+```bash
+arc config --viewer default
+```
+
+The viewer URL is stored in `~/.arc/config.json` and can also be set via environment variable:
+```bash
+ARC_VIEWER_BASE=https://axolotl-ai-cloud.github.io/arc
 ```
 
 ## Security Model

@@ -98,6 +98,10 @@ fi
 if ! command -v arc &> /dev/null; then
   warn "arc not found in PATH. You may need to add npm global bin to your PATH:"
   warn "  export PATH=\"\$(npm prefix -g)/bin:\$PATH\""
+else
+  # Refresh installed framework skills/plugins so they pick up the latest code
+  info "Refreshing installed skills..."
+  arc install-skill 2>/dev/null && ok "Skills refreshed" || true
 fi
 
 # ── Done ───────────────────────────────────────────────────────

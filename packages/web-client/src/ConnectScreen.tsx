@@ -10,7 +10,8 @@ interface Props {
 }
 
 export function ConnectScreen({ onConnect }: Props) {
-  const [url, setUrl] = useState("http://localhost:8600");
+  const params = new URLSearchParams(window.location.search);
+  const [url, setUrl] = useState(params.get("relay") || "http://localhost:8600");
   const [sessionSecret, setSessionSecret] = useState("");
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +100,17 @@ export function ConnectScreen({ onConnect }: Props) {
             Self-host: <code style={styles.code}>docker compose up</code> or{" "}
             <code style={styles.code}>python relay/relay.py</code>
           </p>
+          <div style={styles.githubBox}>
+            <a
+              href="https://github.com/axolotl-ai-cloud/arc"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.githubLink}
+            >
+              axolotl-ai-cloud/arc
+            </a>
+            {" — "}open-source universal remote control for AI agents
+          </div>
         </div>
       </div>
     </div>
@@ -183,11 +195,27 @@ const styles: Record<string, React.CSSProperties> = {
   footer: {
     borderTop: "1px solid #222",
     paddingTop: "16px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "6px",
   },
   footerText: {
     fontSize: "12px",
     color: "#555",
     lineHeight: 1.6,
+  },
+  githubBox: {
+    border: "1px solid #7c3aed",
+    background: "rgba(124, 58, 237, 0.08)",
+    borderRadius: "8px",
+    padding: "10px 12px",
+    fontSize: "12px",
+    color: "#999",
+    lineHeight: 1.6,
+  },
+  githubLink: {
+    color: "#a78bfa",
+    textDecoration: "none",
   },
   code: {
     background: "#1a1a1a",

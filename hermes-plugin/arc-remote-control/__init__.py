@@ -347,7 +347,15 @@ class ArcRelay:
                 if resp.get("kind") == "registered" and resp.get(resp_pin_field):
                     self.viewer_pin = resp[resp_pin_field]
                     relay_http = relay_url.replace("ws://", "http://").replace("wss://", "https://").replace("/ws", "")
-                    self.viewer_url = f"{relay_http}/viewer?session={session_info['sessionId']}&s={self.viewer_pin}"
+                    viewer_base = _get_viewer_base()
+                    if viewer_base:
+                        base = viewer_base.rstrip("/")
+                        self.viewer_url = (
+                            f"{base}?relay={relay_http}"
+                            f"&session={session_info['sessionId']}&s={self.viewer_pin}"
+                        )
+                    else:
+                        self.viewer_url = f"{relay_http}/viewer?session={session_info['sessionId']}&s={self.viewer_pin}"
                     self.connected = True
                     reconnect_attempt = 0  # Reset on successful connect
 
@@ -513,11 +521,17 @@ def _get_relay_url() -> str:
     if "localhost" in url and passphrase.startswith("axolotl_beta_"):
         url = "wss://arc-beta.axolotl.ai/ws"
         config["relayUrl"] = url
-        config["hosted"] = True
         config_file = Path.home() / ".arc" / "config.json"
         config_file.write_text(json.dumps(config, indent=2) + "\n")
         log.info("Auto-migrated relay URL to %s", url)
     return url
+
+
+def _get_viewer_base() -> str | None:
+    """Return a custom viewer base URL if configured, else None (use relay built-in /viewer)."""
+    if v := os.environ.get("ARC_VIEWER_BASE"):
+        return v
+    return _load_arc_config().get("viewerBase")
 
 
 def _get_agent_passphrase() -> str:

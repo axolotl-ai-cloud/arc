@@ -176,9 +176,17 @@ export async function connect(options: ConnectOptions = {}): Promise<ConnectResu
     .replace("ws://", "http://")
     .replace("wss://", "https://")
     .replace("/ws", "");
-  const viewerUrl = config.hosted
-    ? `https://arc.axolotl.ai/session/${sessionId}?s=${sessionSecret}`
-    : `${relayHttpUrl}/viewer?session=${sessionId}&s=${sessionSecret}`;
+
+  let viewerUrl: string;
+  if (config.viewerBase) {
+    // Power-user override: external viewer (e.g. OSS GitHub Pages UI) receives
+    // relay URL + session credentials as query params.
+    const base = config.viewerBase.replace(/\/+$/, "");
+    viewerUrl = `${base}?relay=${encodeURIComponent(relayHttpUrl)}&session=${sessionId}&s=${sessionSecret}`;
+  } else {
+    // Default: use the relay's built-in viewer (works for beta and self-hosted)
+    viewerUrl = `${relayHttpUrl}/viewer?session=${sessionId}&s=${sessionSecret}`;
+  }
 
   // Write session info for other tools to read
   const sessionInfo = { sessionId, sessionSecret, viewerUrl, relayUrl, framework };

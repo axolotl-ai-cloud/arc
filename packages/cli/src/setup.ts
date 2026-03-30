@@ -31,6 +31,7 @@ export interface SetupOptions {
   framework?: ArcConfig["framework"];
   hosted?: boolean;
   selfHosted?: boolean;
+  advanced?: boolean;
 }
 
 function prompt(rl: ReturnType<typeof createInterface>, question: string): Promise<string> {
@@ -138,6 +139,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
 
   let relayUrl: string;
   let agentToken: string;
+  let viewerBase: string | undefined;
 
   if (hosted) {
     relayUrl = "wss://arc-beta.axolotl.ai/ws";
@@ -150,6 +152,22 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       agentToken = "axolotl_beta_" + randomBytes(32).toString("base64url");
     }
     console.log("  Relay:  arc-beta.axolotl.ai");
+
+    // Advanced: allow power users to specify a custom viewer (e.g. OSS GitHub Pages UI)
+    if (options.advanced) {
+      console.log("");
+      console.log("  Advanced: viewer URL override");
+      console.log("  Default viewer is bundled into the relay (arc-beta.axolotl.ai/viewer).");
+      console.log("  To use the OSS viewer you can inspect from source:");
+      console.log("    https://axolotl-ai-cloud.github.io/arc");
+      console.log("");
+      const viewerAnswer = await prompt(rl, `  Custom viewer base URL (Enter to skip): `);
+      const trimmed = viewerAnswer.trim();
+      if (trimmed) {
+        viewerBase = trimmed;
+        console.log(`  ✓ Viewer: ${viewerBase}`);
+      }
+    }
   } else {
     // ── Self-hosted setup ──────────────────────────────────────
 
@@ -242,7 +260,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   }
 
   // 4. Save config
-  saveConfig({ relayUrl, agentToken, framework, hosted, e2e });
+  saveConfig({ relayUrl, agentToken, framework, hosted: false, e2e, viewerBase });
 
   console.log("");
   console.log(`  ✓ Config saved to ${getConfigPath()}`);

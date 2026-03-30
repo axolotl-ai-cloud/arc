@@ -10,7 +10,7 @@
  *   arc status             Show current configuration
  */
 
-import { loadConfig, configExists, getConfigPath } from "./config.js";
+import { loadConfig, saveConfig, configExists, getConfigPath } from "./config.js";
 import { connect } from "./connect.js";
 import { runSetup } from "./setup.js";
 import { installSkill, detectFramework } from "./skill-installer.js";
@@ -23,7 +23,7 @@ function printUsage(): void {
 
   Usage:
     arc setup [options]    Configure relay URL, token, and framework
-    arc connect [options]  Start a remote control session
+    arc config [options]   Get or set individual config values
     arc install-skill      Install /remote-control skill for your framework
     arc update             Update ARC and reinstall skills
     arc status             Show current configuration
@@ -31,31 +31,27 @@ function printUsage(): void {
 
   Setup options:
     --hermes                   Configure for Hermes Agent framework
-    --deepagent                Configure for DeepAgent (LangChain)
-    --openclaw                 Configure for OpenClaw
     --hosted                   Use hosted relay at arc.axolotl.ai (default)
     --self-hosted              Use your own relay server
+    --advanced                 Show advanced options (custom viewer URL, etc.)
 
-  Connect options:
-    --name <name>              Agent name for this session
-    --session-id <id>          Custom session ID (auto-generated if omitted)
-    --relay-url <url>          Override relay URL
-    --token <token>            Override agent token
-    --framework <fw>           Override framework (hermes|deepagent|openclaw|generic)
-    --hermes-url <url>         Hermes Agent API URL (default: http://localhost:3000)
-    --quiet                    Suppress output
-    --json                     Output session info as JSON (for scripting)
+  Config options:
+    --viewer <url>             Set viewer base URL (or "default" to reset)
+    --relay <url>              Set relay WebSocket URL
+    --token <token>            Set agent token
+    --framework <fw>           Set framework (hermes|deepagent|openclaw|generic)
 
   Environment variables:
     ARC_RELAY_URL              Relay WebSocket URL
     ARC_AGENT_TOKEN            Agent authentication token
     ARC_FRAMEWORK              Agent framework
     ARC_HOSTED=true            Use hosted relay (arc.axolotl.ai)
+    ARC_VIEWER_BASE=<url>      Override viewer URL
 
   Quick start:
     curl -fsSL https://raw.githubusercontent.com/axolotl-ai-cloud/arc/refs/heads/main/install.sh | sh
-    arc setup
-    arc connect
+    arc setup --hermes
+    # Then start Hermes and type /remote-control
 `);
 }
 
@@ -93,6 +89,7 @@ async function main(): Promise<void> {
         framework: framework as any,
         hosted: opts["hosted"] === true ? true : undefined,
         selfHosted: opts["self-hosted"] === true,
+        advanced: opts["advanced"] === true,
       });
       break;
     }
@@ -155,6 +152,56 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "config": {
+      const opts = parseArgs(args);
+
+      // arc config --viewer <url>   set viewerBase (or clear with "default")
+      // arc config --relay <url>    set relayUrl
+      // arc config --token <token>  set agentToken
+      // arc config --framework <fw> set framework
+      // arc config (no args)        print current config
+
+      const updates: Record<string, string | undefined> = {};
+      let didUpdate = false;
+
+      if (opts["viewer"] !== undefined) {
+        const v = opts["viewer"] as string;
+        updates["viewerBase"] = (v === "default" || v === "") ? undefined : v;
+        didUpdate = true;
+      }
+      if (opts["relay"] !== undefined) {
+        updates["relayUrl"] = opts["relay"] as string;
+        didUpdate = true;
+      }
+      if (opts["token"] !== undefined) {
+        updates["agentToken"] = opts["token"] as string;
+        didUpdate = true;
+      }
+      if (opts["framework"] !== undefined) {
+        updates["framework"] = opts["framework"] as string;
+        didUpdate = true;
+      }
+
+      if (didUpdate) {
+        saveConfig(updates as any);
+        console.log(`✓ Config updated (${getConfigPath()})`);
+      }
+
+      // Always print current config after update (or with no args)
+      const config = loadConfig();
+      const viewerDesc = config.viewerBase
+        ? config.viewerBase
+        : `${config.relayUrl.replace("wss://", "https://").replace("ws://", "http://").replace("/ws", "")}/viewer`;
+      console.log(`
+  Configuration (${getConfigPath()}):
+    Relay URL:  ${config.relayUrl}
+    Token:      ${config.agentToken ? config.agentToken.slice(0, 12) + "..." : "(not set)"}
+    Framework:  ${config.framework}
+    Viewer:     ${viewerDesc}
+`);
+      break;
+    }
+
     case "status": {
       if (!configExists()) {
         console.log("Not configured. Run `arc setup` to get started.");
@@ -162,12 +209,15 @@ async function main(): Promise<void> {
       }
 
       const config = loadConfig();
+      const viewerDesc = config.viewerBase
+        ? config.viewerBase
+        : `${config.relayUrl.replace("wss://", "https://").replace("ws://", "http://").replace("/ws", "")}/viewer`;
       console.log(`
   Configuration (${getConfigPath()}):
     Relay URL:  ${config.relayUrl}
     Token:      ${config.agentToken ? config.agentToken.slice(0, 12) + "..." : "(not set)"}
     Framework:  ${config.framework}
-    Hosted:     ${config.hosted}
+    Viewer:     ${viewerDesc}
 `);
       break;
     }

@@ -18,6 +18,17 @@ export interface ArcConfig {
   hosted: boolean;
   /** Enable end-to-end encryption (derives key from session secret) */
   e2e: boolean;
+  /**
+   * Override the viewer base URL. When set, viewer links are constructed as:
+   *   {viewerBase}?relay={relayHttpUrl}&session={id}&s={secret}
+   *
+   * Useful for power users who want to use the OSS GitHub Pages UI
+   * (https://axolotl-ai-cloud.github.io/arc) against any relay, rather
+   * than the viewer bundled into the relay server itself.
+   *
+   * Defaults to undefined (use relay's built-in /viewer endpoint).
+   */
+  viewerBase?: string;
 }
 
 const CONFIG_DIR = join(homedir(), ".arc");
@@ -59,6 +70,7 @@ export function loadConfig(): ArcConfig {
     framework: (process.env.ARC_FRAMEWORK as ArcConfig["framework"]) || fileConfig.framework || DEFAULTS.framework,
     hosted: process.env.ARC_HOSTED === "true" || fileConfig.hosted || DEFAULTS.hosted,
     e2e: process.env.ARC_E2E === "true" || fileConfig.e2e || DEFAULTS.e2e,
+    viewerBase: process.env.ARC_VIEWER_BASE || fileConfig.viewerBase,
   };
 }
 
