@@ -24,6 +24,8 @@ function printUsage(): void {
   Usage:
     arc setup [options]    Configure relay URL, token, and framework
     arc config [options]   Get or set individual config values
+    arc sessions           List your active sessions
+    arc sessions --clear   Close all your active sessions
     arc install-skill      Install /remote-control skill for your framework
     arc update             Update ARC and reinstall skills
     arc status             Show current configuration
@@ -219,6 +221,61 @@ async function main(): Promise<void> {
     Framework:  ${config.framework}
     Viewer:     ${viewerDesc}
 `);
+      break;
+    }
+
+    case "sessions": {
+      const config = loadConfig();
+      if (!config.agentToken) {
+        console.error("No agent token configured. Run `arc setup` first.");
+        process.exit(1);
+      }
+
+      const opts = parseArgs(args);
+      const relayHttpUrl = config.relayUrl
+        .replace("wss://", "https://")
+        .replace("ws://", "http://")
+        .replace("/ws", "");
+
+      // List sessions
+      const res = await fetch(`${relayHttpUrl}/sessions`, {
+        headers: { Authorization: `Bearer ${config.agentToken}` },
+      });
+      if (!res.ok) {
+        console.error(`Failed to list sessions: HTTP ${res.status}`);
+        process.exit(1);
+      }
+      const sessions = await res.json() as Array<{ sessionId: string; agentName?: string; createdAt?: string; lastActivity?: number }>;
+
+      if (sessions.length === 0) {
+        console.log("No active sessions.");
+        break;
+      }
+
+      console.log(`\n  Active sessions (${sessions.length}):\n`);
+      for (const s of sessions) {
+        const age = s.lastActivity ? Math.round((Date.now() / 1000 - s.lastActivity) / 60) + "m ago" : "";
+        console.log(`    ${s.sessionId}  ${s.agentName || ""}  ${age}`);
+      }
+      console.log("");
+
+      if (opts["clear"]) {
+        console.log("  Closing all sessions...");
+        for (const s of sessions) {
+          const del = await fetch(`${relayHttpUrl}/sessions/${s.sessionId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${config.agentToken}` },
+          });
+          if (del.ok) {
+            console.log(`  ✓ Closed ${s.sessionId}`);
+          } else {
+            console.log(`  ✗ Failed to close ${s.sessionId}: HTTP ${del.status}`);
+          }
+        }
+        console.log("");
+      } else {
+        console.log("  Run `arc sessions --clear` to close all sessions.\n");
+      }
       break;
     }
 

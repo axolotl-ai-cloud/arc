@@ -384,34 +384,19 @@ subagent activity) to a relay server where a viewer can watch and send commands.
 
 ## Instructions
 
-1. Run the ARC connect command:
+This skill is not yet implemented for Claude Code. To use ARC with Hermes Agent:
 
 \`\`\`bash
-npx @axolotlai/arc-cli connect
+arc setup --hermes
+# Then start Hermes and type /remote-control
 \`\`\`
-
-Or if configured with \`arc setup\`:
-
-\`\`\`bash
-arc connect
-\`\`\`
-
-2. Share the viewer URL printed in the output with whoever needs to observe/control
-   this session.
-
-3. The session stays active until you disconnect or the agent exits.
-
-## Environment Variables
-
-- \`ARC_RELAY_URL\` — WebSocket URL of the relay server (default: wss://arc-beta.axolotl.ai/ws)
-- \`ARC_AGENT_TOKEN\` — Token for authenticating with the relay
-- \`ARC_HOSTED\` — Set to "true" for hosted relay at arc.axolotl.ai
 
 ## Notes
 
 - The viewer URL contains a session secret — only share it with trusted parties
 - All traces (tool calls, outputs, messages) are forwarded to connected viewers
 - Viewers can inject messages and approve/deny tool calls
+- If you hit the session limit: \`arc sessions --clear\`
 `;
 
 const HERMES_SKILL = `---
@@ -446,8 +431,10 @@ Then tell the user:
 1. Print the **complete viewer_url** from the tool result. Do NOT shorten or abbreviate it.
 2. If \`browser_opened\` is true, tell them the viewer has been opened in their browser.
 3. If not, tell them to open the URL in a browser manually.
-4. Explain that the viewer can watch tool calls and outputs in real-time,
-   send messages, and approve/deny tool execution.
+4. Explain that the viewer can:
+   - Watch all tool calls and outputs in real-time
+   - Send messages to this agent
+   - Approve or deny tool execution
 
 All tool calls and LLM responses are automatically streamed to the viewer
 via the ARC plugin hooks — no manual forwarding needed.
@@ -460,12 +447,15 @@ To stop, call \`arc_stop_session\`.
   Tell the user to run: \`arc setup --hermes\`
 - If the error mentions "websocket-client not installed", run:
   \`pip install websocket-client\` (must be in the same Python environment as Hermes)
-- If connection fails, the relay may not be running. Tell the user: \`arc setup\`
+- If the error mentions "session limit reached", the user has hit the per-token session cap.
+  Tell them to run: \`arc sessions --clear\` to close all existing sessions, then retry.
+- If connection fails, the relay may not be running or the token is invalid.
+  Tell the user: \`arc setup\`
 
 ## Verification
 
 The \`arc_start_session\` tool returns \`{"status": "connected", "viewer_url": "..."}\`
-on success. If it returns an error, the relay is not running or the token is invalid.
+on success. If it returns an error, surface it verbatim — it will say what went wrong.
 `;
 
 const DEEPAGENT_MIDDLEWARE_CONFIG = JSON.stringify(
