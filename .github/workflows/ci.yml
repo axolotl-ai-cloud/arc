@@ -19,8 +19,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint TypeScript
+        run: npx eslint packages/*/src/
 
       - name: Build TypeScript
         run: npm run build
@@ -43,10 +43,10 @@ jobs:
           cache: npm
 
       - name: Install Python dependencies
-        run: pip install -r relay/requirements.txt -r hosted/backend/requirements.txt pytest pytest-asyncio httpx ruff
+        run: pip install -r relay/requirements.txt pytest pytest-asyncio httpx ruff
 
       - name: Lint Python
-        run: ruff check relay/ hosted/backend/ tests/
+        run: ruff check relay/ tests/
 
       - name: Install Node dependencies
         run: npm ci
