@@ -164,10 +164,7 @@ class DefaultSessionPolicy:
             return (False, f"max sessions reached ({self._max_sessions})")
 
         if _MAX_SESSIONS_PER_USER > 0 and user_id is not None:
-            user_sessions = sum(
-                1 for s in (await self._store.list_for_tenant())
-                if s.user_id == user_id
-            )
+            user_sessions = sum(1 for s in (await self._store.list_for_tenant()) if s.user_id == user_id)
             if user_sessions >= _MAX_SESSIONS_PER_USER:
                 return (False, f"session limit reached ({user_sessions} / {_MAX_SESSIONS_PER_USER} per token)")
 

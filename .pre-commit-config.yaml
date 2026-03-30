@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: lint
+        name: lint (eslint + ruff)
+        entry: npm run lint --silent
+        language: system
+        pass_filenames: false
+        files: \.(ts|tsx|py)$
+
+      - id: tsc
+        name: TypeScript build
+        entry: npm run build --silent
+        language: system
+        pass_filenames: false
+        files: \.(ts|tsx)$
+
+      - id: pytest
+        name: Python tests
+        entry: npm run test:py --silent
+        language: system
+        pass_filenames: false
+        files: ^(relay|tests|hermes-plugin)/.*\.py$
