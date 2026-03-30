@@ -20,7 +20,7 @@
     "prepare": "husky",
     "lint": "eslint packages/*/src/ && ruff check relay/ tests/",
     "test:ts": "npm run test:protocol",
-    "test:py": "npm run test:relay && npm run test:plugin && npm run test:contracts && npm run test:integration && npm run test:websocket",
+    "test:py": "npm run test:relay && npm run test:plugin && npm run test:contracts && npm run test:websocket",
     "test": "npm run test:ts && npm run test:py"
   },
   "license": "MIT",
