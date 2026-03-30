@@ -44,8 +44,8 @@ class AuthResult:
     """Result of an authentication attempt."""
 
     authenticated: bool
-    user_id: str | None = None       # Individual user (for audit trails)
-    tenant_id: str | None = None     # Organization/team (for plan limits, isolation)
+    user_id: str | None = None  # Individual user (for audit trails)
+    tenant_id: str | None = None  # Organization/team (for plan limits, isolation)
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -58,7 +58,9 @@ class AuthProvider(Protocol):
     """Authenticates agents, viewers, and admin API callers."""
 
     async def authenticate_agent(
-        self, token: str | None, headers: dict[str, str],
+        self,
+        token: str | None,
+        headers: dict[str, str],
     ) -> AuthResult:
         """
         Authenticate an agent registering a session.
@@ -70,7 +72,10 @@ class AuthProvider(Protocol):
         ...
 
     async def authenticate_viewer(
-        self, session: Session, secret: str | None, headers: dict[str, str],
+        self,
+        session: Session,
+        secret: str | None,
+        headers: dict[str, str],
     ) -> AuthResult:
         """
         Authenticate a viewer subscribing to a session.
@@ -85,7 +90,9 @@ class AuthProvider(Protocol):
         ...
 
     async def authenticate_admin(
-        self, token: str | None, headers: dict[str, str],
+        self,
+        token: str | None,
+        headers: dict[str, str],
     ) -> AuthResult:
         """
         Authenticate admin HTTP requests (e.g., GET /sessions).
@@ -110,17 +117,13 @@ class SessionStore(Protocol):
       - The hosted Redis/DB implementation can use tenant-prefixed keys
     """
 
-    async def get(self, session_id: str) -> Session | None:
-        ...
+    async def get(self, session_id: str) -> Session | None: ...
 
-    async def put(self, session_id: str, session: Session) -> None:
-        ...
+    async def put(self, session_id: str, session: Session) -> None: ...
 
-    async def remove(self, session_id: str) -> Session | None:
-        ...
+    async def remove(self, session_id: str) -> Session | None: ...
 
-    async def exists(self, session_id: str) -> bool:
-        ...
+    async def exists(self, session_id: str) -> bool: ...
 
     async def count(self, tenant_id: str | None = None) -> int:
         """
@@ -160,7 +163,10 @@ class SessionPolicy(Protocol):
     """
 
     async def can_create_session(
-        self, user_id: str | None, tenant_id: str | None, auth_result: AuthResult,
+        self,
+        user_id: str | None,
+        tenant_id: str | None,
+        auth_result: AuthResult,
     ) -> tuple[bool, str | None]:
         """
         Check whether this user/tenant may create a new session.
@@ -172,7 +178,9 @@ class SessionPolicy(Protocol):
         ...
 
     def max_sessions_for_tenant(
-        self, tenant_id: str | None, auth_result: AuthResult,
+        self,
+        tenant_id: str | None,
+        auth_result: AuthResult,
     ) -> int | None:
         """
         Return the session cap for this tenant, or None for unlimited.
@@ -204,8 +212,7 @@ class LifecycleHooks(Protocol):
         user_id: str | None,
         tenant_id: str | None,
         metadata: dict[str, Any],
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def on_session_destroyed(
         self,
@@ -213,15 +220,18 @@ class LifecycleHooks(Protocol):
         user_id: str | None,
         tenant_id: str | None,
         reason: str,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def on_viewer_joined(
-        self, session_id: str, tenant_id: str | None, viewer_count: int,
-    ) -> None:
-        ...
+        self,
+        session_id: str,
+        tenant_id: str | None,
+        viewer_count: int,
+    ) -> None: ...
 
     async def on_viewer_left(
-        self, session_id: str, tenant_id: str | None, viewer_count: int,
-    ) -> None:
-        ...
+        self,
+        session_id: str,
+        tenant_id: str | None,
+        viewer_count: int,
+    ) -> None: ...

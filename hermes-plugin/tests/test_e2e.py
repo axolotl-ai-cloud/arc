@@ -13,6 +13,7 @@ import pytest
 def relay():
     """Create a fresh ArcRelay with E2E enabled."""
     from hermes_plugin_path import ArcRelay
+
     r = ArcRelay()
     r.e2e_enabled = True
     r.session_id = "test-session-123"
@@ -97,6 +98,7 @@ class TestE2EEncryptDecrypt:
         when running without the real cryptography package."""
         try:
             from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
             # Check if this is the real AESGCM or our test mock
             if not hasattr(AESGCM, "__module__") or "cryptography" not in getattr(AESGCM, "__module__", ""):
                 pytest.skip("Mock crypto doesn't enforce AAD")
@@ -129,6 +131,7 @@ class TestE2ESendTrace:
         class MockWS:
             def __init__(self):
                 self.sent = []
+
             def send(self, data):
                 self.sent.append(data)
 
@@ -158,6 +161,7 @@ class TestE2ESendTrace:
         class MockWS:
             def __init__(self):
                 self.sent = []
+
             def send(self, data):
                 self.sent.append(data)
 

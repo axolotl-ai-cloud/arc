@@ -41,7 +41,7 @@ class Session:
     info: SessionInfo
     session_secret: str
     user_id: str | None = None
-    tenant_id: str | None = None     # Org/team that owns this session (for multi-tenant)
+    tenant_id: str | None = None  # Org/team that owns this session (for multi-tenant)
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     viewers: set[WebSocket] = field(default_factory=set)

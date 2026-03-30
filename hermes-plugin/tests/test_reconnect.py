@@ -46,6 +46,7 @@ class FakeWebSocket:
             return self._recv_queue.pop(0)
         # Simulate timeout
         import websocket
+
         raise websocket.WebSocketTimeoutException("timeout")
 
     def settimeout(self, t):
@@ -85,11 +86,13 @@ class TestArcRelayReconnect:
 
         # We need to test the ArcRelay class directly
         from hermes_plugin_path import ArcRelay
+
         return ArcRelay()
 
     def test_successful_connect(self, mock_websocket):
         """Test that a successful connection sets connected=True."""
         from hermes_plugin_path import ArcRelay
+
         relay = ArcRelay()
 
         connect_count = 0
@@ -127,6 +130,7 @@ class TestArcRelayReconnect:
     def test_reconnect_after_disconnect(self, mock_websocket):
         """Test that the relay reconnects after a WebSocket disconnect."""
         from hermes_plugin_path import ArcRelay
+
         relay = ArcRelay()
 
         connect_count = 0
@@ -167,6 +171,7 @@ class TestArcRelayReconnect:
     def test_reconnect_preserves_session_id(self, mock_websocket):
         """Test that reconnect uses the same session ID."""
         from hermes_plugin_path import ArcRelay
+
         relay = ArcRelay()
 
         registrations = []
@@ -216,6 +221,7 @@ class TestArcRelayReconnect:
     def test_gives_up_after_max_attempts(self, mock_websocket):
         """Test that reconnect gives up after max attempts."""
         from hermes_plugin_path import ArcRelay
+
         relay = ArcRelay()
 
         connect_count = 0
@@ -245,6 +251,7 @@ class TestArcRelayReconnect:
     def test_stop_event_halts_reconnect(self, mock_websocket):
         """Test that setting _stop prevents further reconnect attempts."""
         from hermes_plugin_path import ArcRelay
+
         relay = ArcRelay()
 
         connect_count = 0
@@ -276,6 +283,7 @@ class TestArcRelayReconnect:
     def test_registration_failure_stops_retry(self, mock_websocket):
         """Test that a registration error (bad token) doesn't retry."""
         from hermes_plugin_path import ArcRelay
+
         relay = ArcRelay()
 
         mock_websocket.queue_response({"error": "invalid agent token"})

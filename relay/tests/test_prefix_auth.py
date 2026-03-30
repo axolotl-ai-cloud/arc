@@ -19,12 +19,14 @@ def beta_provider():
         import importlib
 
         import relay.defaults as defaults_mod
+
         importlib.reload(defaults_mod)
         yield defaults_mod.TokenAuthProvider(agent_token="")
     # Restore
     import importlib
 
     import relay.defaults as defaults_mod
+
     importlib.reload(defaults_mod)
 
 

@@ -278,6 +278,7 @@ class TestHTTPEndpoints:
     async def test_sessions_with_token(self, client):
         # We need the actual AGENT_TOKEN from the relay module
         from relay.relay import AGENT_TOKEN
+
         resp = await client.get(
             "/sessions",
             headers={"Authorization": f"Bearer {AGENT_TOKEN}"},

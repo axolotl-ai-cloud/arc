@@ -51,16 +51,18 @@ def client(app):
 
 def register_agent(ws, session_id="test-session", token=TEST_TOKEN):
     """Helper: register an agent and return the session secret."""
-    ws.send_json({
-        "kind": "register",
-        "token": token,
-        "session": {
-            "sessionId": session_id,
-            "agentFramework": "hermes",
-            "agentName": "test-agent",
-            "startedAt": "2025-01-01T00:00:00Z",
-        },
-    })
+    ws.send_json(
+        {
+            "kind": "register",
+            "token": token,
+            "session": {
+                "sessionId": session_id,
+                "agentFramework": "hermes",
+                "agentName": "test-agent",
+                "startedAt": "2025-01-01T00:00:00Z",
+            },
+        }
+    )
     resp = ws.receive_json()
     assert resp["kind"] == "registered", f"Expected 'registered', got: {resp}"
     assert resp["sessionId"] == session_id
@@ -70,11 +72,13 @@ def register_agent(ws, session_id="test-session", token=TEST_TOKEN):
 
 def subscribe_viewer(ws, session_id="test-session", session_secret=""):
     """Helper: subscribe a viewer and return the session info."""
-    ws.send_json({
-        "kind": "subscribe",
-        "sessionId": session_id,
-        "sessionSecret": session_secret,
-    })
+    ws.send_json(
+        {
+            "kind": "subscribe",
+            "sessionId": session_id,
+            "sessionSecret": session_secret,
+        }
+    )
     resp = ws.receive_json()
     assert resp["kind"] == "register", f"Expected session info, got: {resp}"
     return resp
@@ -100,28 +104,32 @@ class TestAgentRegistration:
 
     def test_agent_registration_fails_with_wrong_token(self, client):
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({
-                "kind": "register",
-                "token": "wrong-token",
-                "session": {
-                    "sessionId": "test-session",
-                    "agentFramework": "hermes",
-                    "startedAt": "2025-01-01T00:00:00Z",
-                },
-            })
+            ws.send_json(
+                {
+                    "kind": "register",
+                    "token": "wrong-token",
+                    "session": {
+                        "sessionId": "test-session",
+                        "agentFramework": "hermes",
+                        "startedAt": "2025-01-01T00:00:00Z",
+                    },
+                }
+            )
             resp = ws.receive_json()
             assert "error" in resp
 
     def test_agent_registration_fails_without_token(self, client):
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({
-                "kind": "register",
-                "session": {
-                    "sessionId": "test-session",
-                    "agentFramework": "hermes",
-                    "startedAt": "2025-01-01T00:00:00Z",
-                },
-            })
+            ws.send_json(
+                {
+                    "kind": "register",
+                    "session": {
+                        "sessionId": "test-session",
+                        "agentFramework": "hermes",
+                        "startedAt": "2025-01-01T00:00:00Z",
+                    },
+                }
+            )
             resp = ws.receive_json()
             assert "error" in resp
 
@@ -130,15 +138,17 @@ class TestAgentRegistration:
             register_agent(agent1, session_id="dup-session")
 
             with client.websocket_connect("/ws") as agent2:
-                agent2.send_json({
-                    "kind": "register",
-                    "token": TEST_TOKEN,
-                    "session": {
-                        "sessionId": "dup-session",
-                        "agentFramework": "hermes",
-                        "startedAt": "2025-01-01T00:00:00Z",
-                    },
-                })
+                agent2.send_json(
+                    {
+                        "kind": "register",
+                        "token": TEST_TOKEN,
+                        "session": {
+                            "sessionId": "dup-session",
+                            "agentFramework": "hermes",
+                            "startedAt": "2025-01-01T00:00:00Z",
+                        },
+                    }
+                )
                 resp = agent2.receive_json()
                 assert "error" in resp
                 assert "already exists" in resp["error"]
@@ -164,11 +174,13 @@ class TestViewerSubscription:
             register_agent(agent)
 
             with client.websocket_connect("/ws") as viewer:
-                viewer.send_json({
-                    "kind": "subscribe",
-                    "sessionId": "test-session",
-                    "sessionSecret": "wrong-secret",
-                })
+                viewer.send_json(
+                    {
+                        "kind": "subscribe",
+                        "sessionId": "test-session",
+                        "sessionSecret": "wrong-secret",
+                    }
+                )
                 resp = viewer.receive_json()
                 assert "error" in resp
 
@@ -177,21 +189,25 @@ class TestViewerSubscription:
             register_agent(agent)
 
             with client.websocket_connect("/ws") as viewer:
-                viewer.send_json({
-                    "kind": "subscribe",
-                    "sessionId": "test-session",
-                    "sessionSecret": "",
-                })
+                viewer.send_json(
+                    {
+                        "kind": "subscribe",
+                        "sessionId": "test-session",
+                        "sessionSecret": "",
+                    }
+                )
                 resp = viewer.receive_json()
                 assert "error" in resp
 
     def test_viewer_rejected_for_nonexistent_session(self, client):
         with client.websocket_connect("/ws") as viewer:
-            viewer.send_json({
-                "kind": "subscribe",
-                "sessionId": "nonexistent",
-                "sessionSecret": "anything",
-            })
+            viewer.send_json(
+                {
+                    "kind": "subscribe",
+                    "sessionId": "nonexistent",
+                    "sessionSecret": "anything",
+                }
+            )
             resp = viewer.receive_json()
             assert "error" in resp
             assert "not found" in resp["error"]
@@ -358,17 +374,19 @@ class TestCommandForwarding:
                 subscribe_viewer(viewer, "test-session", secret)
 
                 # Viewer sends a command
-                viewer.send_json({
-                    "kind": "command",
-                    "command": {
-                        "id": "cmd-1",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:00Z",
-                        "type": "inject_message",
-                        "content": "Please search for Python docs",
-                        "role": "user",
-                    },
-                })
+                viewer.send_json(
+                    {
+                        "kind": "command",
+                        "command": {
+                            "id": "cmd-1",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:00Z",
+                            "type": "inject_message",
+                            "content": "Please search for Python docs",
+                            "role": "user",
+                        },
+                    }
+                )
 
                 # Agent should receive the command
                 received = agent.receive_json()
@@ -385,16 +403,18 @@ class TestCommandForwarding:
             with client.websocket_connect("/ws") as viewer:
                 subscribe_viewer(viewer, "test-session", secret)
 
-                viewer.send_json({
-                    "kind": "command",
-                    "command": {
-                        "id": "cmd-cancel",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:00Z",
-                        "type": "cancel",
-                        "reason": "Taking too long",
-                    },
-                })
+                viewer.send_json(
+                    {
+                        "kind": "command",
+                        "command": {
+                            "id": "cmd-cancel",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:00Z",
+                            "type": "cancel",
+                            "reason": "Taking too long",
+                        },
+                    }
+                )
 
                 received = agent.receive_json()
                 assert received["command"]["type"] == "cancel"
@@ -408,16 +428,18 @@ class TestCommandForwarding:
             with client.websocket_connect("/ws") as viewer:
                 subscribe_viewer(viewer, "test-session", secret)
 
-                viewer.send_json({
-                    "kind": "command",
-                    "command": {
-                        "id": "cmd-approve",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:00Z",
-                        "type": "approve_tool",
-                        "toolCallId": "tc-42",
-                    },
-                })
+                viewer.send_json(
+                    {
+                        "kind": "command",
+                        "command": {
+                            "id": "cmd-approve",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:00Z",
+                            "type": "approve_tool",
+                            "toolCallId": "tc-42",
+                        },
+                    }
+                )
 
                 received = agent.receive_json()
                 assert received["command"]["type"] == "approve_tool"
@@ -431,17 +453,19 @@ class TestCommandForwarding:
             with client.websocket_connect("/ws") as viewer:
                 subscribe_viewer(viewer, "test-session", secret)
 
-                viewer.send_json({
-                    "kind": "command",
-                    "command": {
-                        "id": "cmd-deny",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:00Z",
-                        "type": "deny_tool",
-                        "toolCallId": "tc-99",
-                        "reason": "Too dangerous",
-                    },
-                })
+                viewer.send_json(
+                    {
+                        "kind": "command",
+                        "command": {
+                            "id": "cmd-deny",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:00Z",
+                            "type": "deny_tool",
+                            "toolCallId": "tc-99",
+                            "reason": "Too dangerous",
+                        },
+                    }
+                )
 
                 received = agent.receive_json()
                 assert received["command"]["type"] == "deny_tool"
@@ -456,16 +480,18 @@ class TestCommandForwarding:
             with client.websocket_connect("/ws") as viewer:
                 subscribe_viewer(viewer, "test-session", secret)
 
-                viewer.send_json({
-                    "kind": "command",
-                    "command": {
-                        "id": "cmd-bad",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:00Z",
-                        "type": "execute_shell",
-                        "content": "rm -rf /",
-                    },
-                })
+                viewer.send_json(
+                    {
+                        "kind": "command",
+                        "command": {
+                            "id": "cmd-bad",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:00Z",
+                            "type": "execute_shell",
+                            "content": "rm -rf /",
+                        },
+                    }
+                )
 
                 resp = viewer.receive_json()
                 assert "error" in resp
@@ -494,78 +520,88 @@ class TestBidirectionalRoundTrip:
                 subscribe_viewer(viewer, "test-session", secret)
 
                 # Step 1: Agent sends "thinking" status
-                agent.send_json({
-                    "kind": "trace",
-                    "event": {
-                        "id": "evt-thinking",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:01Z",
-                        "type": "status_change",
-                        "status": "waiting_for_input",
-                        "detail": "What should I do?",
-                    },
-                })
+                agent.send_json(
+                    {
+                        "kind": "trace",
+                        "event": {
+                            "id": "evt-thinking",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:01Z",
+                            "type": "status_change",
+                            "status": "waiting_for_input",
+                            "detail": "What should I do?",
+                        },
+                    }
+                )
                 r1 = viewer.receive_json()
                 assert r1["event"]["status"] == "waiting_for_input"
 
                 # Step 2: Viewer injects a message
-                viewer.send_json({
-                    "kind": "command",
-                    "command": {
-                        "id": "cmd-user-input",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:02Z",
-                        "type": "inject_message",
-                        "content": "Search for FastAPI docs",
-                    },
-                })
+                viewer.send_json(
+                    {
+                        "kind": "command",
+                        "command": {
+                            "id": "cmd-user-input",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:02Z",
+                            "type": "inject_message",
+                            "content": "Search for FastAPI docs",
+                        },
+                    }
+                )
                 r2 = agent.receive_json()
                 assert r2["command"]["content"] == "Search for FastAPI docs"
 
                 # Step 3: Agent executes tool call
-                agent.send_json({
-                    "kind": "trace",
-                    "event": {
-                        "id": "evt-tool",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:03Z",
-                        "type": "tool_call",
-                        "toolName": "web_search",
-                        "toolInput": {"query": "FastAPI documentation"},
-                        "status": "started",
-                    },
-                })
+                agent.send_json(
+                    {
+                        "kind": "trace",
+                        "event": {
+                            "id": "evt-tool",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:03Z",
+                            "type": "tool_call",
+                            "toolName": "web_search",
+                            "toolInput": {"query": "FastAPI documentation"},
+                            "status": "started",
+                        },
+                    }
+                )
                 r3 = viewer.receive_json()
                 assert r3["event"]["toolName"] == "web_search"
 
                 # Step 4: Agent sends tool result
-                agent.send_json({
-                    "kind": "trace",
-                    "event": {
-                        "id": "evt-result",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:04Z",
-                        "type": "tool_result",
-                        "toolCallId": "evt-tool",
-                        "output": "Found: https://fastapi.tiangolo.com",
-                        "isError": False,
-                    },
-                })
+                agent.send_json(
+                    {
+                        "kind": "trace",
+                        "event": {
+                            "id": "evt-result",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:04Z",
+                            "type": "tool_result",
+                            "toolCallId": "evt-tool",
+                            "output": "Found: https://fastapi.tiangolo.com",
+                            "isError": False,
+                        },
+                    }
+                )
                 r4 = viewer.receive_json()
                 assert r4["event"]["output"] == "Found: https://fastapi.tiangolo.com"
 
                 # Step 5: Agent sends final message
-                agent.send_json({
-                    "kind": "trace",
-                    "event": {
-                        "id": "evt-reply",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:05Z",
-                        "type": "agent_message",
-                        "role": "assistant",
-                        "content": "Here are the FastAPI docs: https://fastapi.tiangolo.com",
-                    },
-                })
+                agent.send_json(
+                    {
+                        "kind": "trace",
+                        "event": {
+                            "id": "evt-reply",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:05Z",
+                            "type": "agent_message",
+                            "role": "assistant",
+                            "content": "Here are the FastAPI docs: https://fastapi.tiangolo.com",
+                        },
+                    }
+                )
                 r5 = viewer.receive_json()
                 assert "FastAPI docs" in r5["event"]["content"]
 
@@ -585,17 +621,19 @@ class TestRoleEnforcement:
                 subscribe_viewer(viewer, "test-session", secret)
 
                 # Viewer tries to send a trace (should be rejected)
-                viewer.send_json({
-                    "kind": "trace",
-                    "event": {
-                        "id": "evt-imposter",
-                        "sessionId": "test-session",
-                        "timestamp": "2025-01-01T00:00:00Z",
-                        "type": "agent_message",
-                        "role": "assistant",
-                        "content": "I am not the agent",
-                    },
-                })
+                viewer.send_json(
+                    {
+                        "kind": "trace",
+                        "event": {
+                            "id": "evt-imposter",
+                            "sessionId": "test-session",
+                            "timestamp": "2025-01-01T00:00:00Z",
+                            "type": "agent_message",
+                            "role": "assistant",
+                            "content": "I am not the agent",
+                        },
+                    }
+                )
                 resp = viewer.receive_json()
                 assert "error" in resp
                 assert "not authorized" in resp["error"]
@@ -603,33 +641,37 @@ class TestRoleEnforcement:
     def test_unauthenticated_cannot_send_commands(self, client):
         """An unauthenticated WebSocket should not be able to send commands."""
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({
-                "kind": "command",
-                "command": {
-                    "id": "cmd-sneaky",
-                    "sessionId": "test-session",
-                    "timestamp": "2025-01-01T00:00:00Z",
-                    "type": "inject_message",
-                    "content": "Sneaky command",
-                },
-            })
+            ws.send_json(
+                {
+                    "kind": "command",
+                    "command": {
+                        "id": "cmd-sneaky",
+                        "sessionId": "test-session",
+                        "timestamp": "2025-01-01T00:00:00Z",
+                        "type": "inject_message",
+                        "content": "Sneaky command",
+                    },
+                }
+            )
             resp = ws.receive_json()
             assert "error" in resp
 
     def test_unauthenticated_cannot_send_traces(self, client):
         """An unauthenticated WebSocket should not be able to send traces."""
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({
-                "kind": "trace",
-                "event": {
-                    "id": "evt-sneaky",
-                    "sessionId": "test-session",
-                    "timestamp": "2025-01-01T00:00:00Z",
-                    "type": "agent_message",
-                    "role": "assistant",
-                    "content": "Sneaky trace",
-                },
-            })
+            ws.send_json(
+                {
+                    "kind": "trace",
+                    "event": {
+                        "id": "evt-sneaky",
+                        "sessionId": "test-session",
+                        "timestamp": "2025-01-01T00:00:00Z",
+                        "type": "agent_message",
+                        "role": "assistant",
+                        "content": "Sneaky trace",
+                    },
+                }
+            )
             resp = ws.receive_json()
             assert "error" in resp
 

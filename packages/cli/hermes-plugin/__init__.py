@@ -17,6 +17,7 @@ from __future__ import annotations
 try:
     from pathlib import Path as _P
     import time as _t
+
     (_P.home() / ".arc").mkdir(exist_ok=True)
     (_P.home() / ".arc" / "plugin.log").open("a").write(
         f"{_t.strftime('%H:%M:%S')} arc-remote-control __init__.py loading...\n"
@@ -43,11 +44,10 @@ log = logging.getLogger("arc")
 def _log_to_file(msg: str):
     """Write to ~/.arc/plugin.log (survives prompt_toolkit stdout suppression)."""
     try:
-        (Path.home() / ".arc" / "plugin.log").open("a").write(
-            f"{time.strftime('%H:%M:%S')} {msg}\n"
-        )
+        (Path.home() / ".arc" / "plugin.log").open("a").write(f"{time.strftime('%H:%M:%S')} {msg}\n")
     except Exception:
         pass
+
 
 # ─── Ensure websocket-client is installed in this Python env ────────
 # This runs at plugin load time (Hermes startup) so it's ready before
@@ -57,6 +57,7 @@ try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM as _aesgcm_check  # noqa: F401
 except ImportError:
     import sys as _sys
+
     _pip_exe = _sys.executable
     log.info("Installing websocket-client into %s", _pip_exe)
     _install_ok = False
@@ -64,7 +65,8 @@ except ImportError:
     try:
         subprocess.check_call(
             [_pip_exe, "-m", "pip", "install", "-q", "websocket-client", "cryptography"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         _install_ok = True
     except Exception:
@@ -76,7 +78,8 @@ except ImportError:
             try:
                 subprocess.check_call(
                     [_venv_pip, "install", "-q", "websocket-client"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
                 _install_ok = True
             except Exception:
@@ -84,15 +87,27 @@ except ImportError:
     # Fallback: try pip3 / pip from PATH
     if not _install_ok:
         import shutil
+
         for _pip_name in ["pip3", "pip"]:
             _pip_path = shutil.which(_pip_name)
             if _pip_path:
                 try:
                     subprocess.check_call(
-                        [_pip_path, "install", "-q", "--target",
-                         str(Path(_pip_exe).parent.parent / "lib" / f"python{_sys.version_info.major}.{_sys.version_info.minor}" / "site-packages"),
-                         "websocket-client"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        [
+                            _pip_path,
+                            "install",
+                            "-q",
+                            "--target",
+                            str(
+                                Path(_pip_exe).parent.parent
+                                / "lib"
+                                / f"python{_sys.version_info.major}.{_sys.version_info.minor}"
+                                / "site-packages"
+                            ),
+                            "websocket-client",
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
                     )
                     _install_ok = True
                     break
@@ -115,6 +130,7 @@ except ImportError:
 
 
 # ─── Relay Connection State ─────────────────────────────────────────
+
 
 class ArcRelay:
     """Manages the WebSocket connection to the ARC relay server."""
@@ -142,6 +158,7 @@ class ArcRelay:
             import websocket  # noqa: F401
         except ImportError:
             import sys
+
             return {"error": f"websocket-client not installed. Run: {sys.executable} -m pip install websocket-client"}
 
         self.session_id = f"{int(time.time())}-{secrets.token_hex(4)}"
@@ -182,7 +199,9 @@ class ArcRelay:
                 "session_id": self.session_id,
                 "browser_opened": opened,
             }
-        return {"error": self._error or f"Failed to connect to relay at {relay_url}. Check ~/.arc/relay.log for details."}
+        return {
+            "error": self._error or f"Failed to connect to relay at {relay_url}. Check ~/.arc/relay.log for details."
+        }
 
     def stop(self):
         """Disconnect from the relay."""
@@ -203,6 +222,7 @@ class ArcRelay:
         try:
             from cryptography.hazmat.primitives.hashes import SHA256
             from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
             hkdf = HKDF(
                 algorithm=SHA256(),
                 length=32,
@@ -214,7 +234,9 @@ class ArcRelay:
             # Fallback: manual HKDF (RFC 5869)
             # Extract
             prk = hmac_mod.new(
-                session_id.encode(), pin.encode(), hashlib.sha256,
+                session_id.encode(),
+                pin.encode(),
+                hashlib.sha256,
             ).digest()
             # Expand (single block)
             okm = hmac_mod.new(prk, b"arc-e2e-v1\x01", hashlib.sha256).digest()
@@ -247,6 +269,7 @@ class ArcRelay:
         """Decrypt an encrypted command from a viewer."""
         try:
             from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
             ciphertext = base64.b64decode(payload["ciphertext"])
             nonce = base64.b64decode(payload["nonce"])
             aad = (self.session_id or "").encode()
@@ -398,7 +421,7 @@ class ArcRelay:
             _log_to_file(f"viewer command: inject_message content={content[:100]}")
 
             # If clarify is waiting, feed the answer directly
-            if getattr(self, '_waiting_for_clarify', False):
+            if getattr(self, "_waiting_for_clarify", False):
                 self._viewer_clarify_answer = content
                 _log_to_file(f"routed to clarify: {content[:100]}")
                 return
@@ -411,15 +434,14 @@ class ArcRelay:
                         # Don't emit a trace here — pre_llm_call hook will send the
                         # user_message trace when Hermes processes the injected message.
                     else:
-                        log.warning(
-                            "[ARC] inject_message not available. "
-                            "Run `arc update` to patch hermes."
+                        log.warning("[ARC] inject_message not available. Run `arc update` to patch hermes.")
+                        self.send_trace(
+                            {
+                                "type": "error",
+                                "code": "INJECT_UNAVAILABLE",
+                                "message": "Message injection not available. Run `arc update` to patch hermes.",
+                            }
                         )
-                        self.send_trace({
-                            "type": "error",
-                            "code": "INJECT_UNAVAILABLE",
-                            "message": "Message injection not available. Run `arc update` to patch hermes.",
-                        })
                 except Exception as e:
                     log.warning("[ARC] inject_message failed: %s", e)
         elif cmd_type == "cancel":
@@ -449,13 +471,16 @@ class ArcRelay:
     @staticmethod
     def _copy_to_clipboard(text: str):
         import platform
+
         try:
             if platform.system() == "Darwin":
                 subprocess.run(["pbcopy"], input=text.encode(), check=True, capture_output=True)
             else:
                 subprocess.run(
                     ["xclip", "-selection", "clipboard"],
-                    input=text.encode(), check=True, capture_output=True,
+                    input=text.encode(),
+                    check=True,
+                    capture_output=True,
                 )
         except Exception:
             pass
@@ -464,6 +489,7 @@ class ArcRelay:
     def _open_browser(url: str) -> bool:
         try:
             import webbrowser
+
             return webbrowser.open(url)
         except Exception:
             return False
@@ -475,6 +501,7 @@ _plugin_ctx = None  # Set during register(), used for message injection
 
 
 # ─── Config ─────────────────────────────────────────────────────────
+
 
 def _get_relay_url() -> str:
     if v := os.environ.get("ARC_RELAY_URL"):
@@ -533,6 +560,7 @@ def _load_arc_config() -> dict:
 
 # ─── Tool Handlers ──────────────────────────────────────────────────
 
+
 def _handle_start(args: dict, **kw) -> str:
     passphrase = _get_agent_passphrase()
     if not passphrase:
@@ -546,15 +574,18 @@ def _handle_start(args: dict, **kw) -> str:
         relay_http = relay_url.replace("ws://", "http://").replace("wss://", "https://").replace("/ws", "")
         try:
             import urllib.request
+
             req = urllib.request.urlopen(f"{relay_http}/health", timeout=3)
             req.close()
         except Exception:
             started = _try_start_relay(passphrase)
             if not started:
-                return json.dumps({
-                    "error": "Local relay server is not running.",
-                    "fix": "Run `arc setup --self-hosted` in a terminal to start it.",
-                })
+                return json.dumps(
+                    {
+                        "error": "Local relay server is not running.",
+                        "fix": "Run `arc setup --self-hosted` in a terminal to start it.",
+                    }
+                )
 
     # Connect (for hosted relays, just try directly — the WebSocket will fail with
     # a clear error if the relay is unreachable)
@@ -573,19 +604,22 @@ def _handle_stop(args: dict, **kw) -> str:
 
 def _handle_status(args: dict, **kw) -> str:
     """Return current connection status."""
-    return json.dumps({
-        "connected": _relay.connected,
-        "session_id": _relay.session_id,
-        "viewer_url": _relay.viewer_url,
-        "relay_url": _get_relay_url(),
-        "ws_alive": _relay.ws is not None and _relay.connected,
-    })
+    return json.dumps(
+        {
+            "connected": _relay.connected,
+            "session_id": _relay.session_id,
+            "viewer_url": _relay.viewer_url,
+            "relay_url": _get_relay_url(),
+            "ws_alive": _relay.ws is not None and _relay.connected,
+        }
+    )
 
 
 def _try_start_relay(passphrase: str) -> bool:
     """Try to start the relay server. Returns True if successful."""
     try:
         import shutil
+
         python = shutil.which("python3") or shutil.which("python")
         if not python:
             return False
@@ -623,6 +657,7 @@ def _try_start_relay(passphrase: str) -> bool:
         (Path.home() / ".arc" / "relay.pid").write_text(str(proc.pid))
 
         import urllib.request
+
         relay_http = _get_relay_url().replace("ws://", "http://").replace("wss://", "https://").replace("/ws", "")
         for _ in range(20):
             time.sleep(0.5)
@@ -641,6 +676,7 @@ def _try_start_relay(passphrase: str) -> bool:
 
 
 # ─── Lifecycle Hooks ────────────────────────────────────────────────
+
 
 def _on_session_start(**kwargs):
     """Auto-connect if ARC_AUTO_CONNECT is set."""
@@ -664,22 +700,26 @@ def _on_pre_tool_call(tool_name: str = "", args: dict = {}, task_id: str = "", *
     for k, v in (args or {}).items():
         s = str(v)
         safe_args[k] = s[:2000] if len(s) > 2000 else v
-    _relay.send_trace({
-        "type": "tool_call",
-        "toolName": tool_name,
-        "toolInput": safe_args,
-        "status": "started",
-    })
+    _relay.send_trace(
+        {
+            "type": "tool_call",
+            "toolName": tool_name,
+            "toolInput": safe_args,
+            "status": "started",
+        }
+    )
 
     # Note: clarify tool is special-cased in Hermes's agent loop and bypasses
     # pre_tool_call entirely. Clarify forwarding is handled by monkeypatching
     # hermes_cli.callbacks.clarify_callback in register().
 
-    _relay.send_trace({
-        "type": "status_change",
-        "status": "executing",
-        "detail": f"Running {tool_name}",
-    })
+    _relay.send_trace(
+        {
+            "type": "status_change",
+            "status": "executing",
+            "detail": f"Running {tool_name}",
+        }
+    )
 
 
 def _on_post_tool_call(tool_name: str = "", args: dict = {}, result: str = "", task_id: str = "", **kwargs):
@@ -696,18 +736,22 @@ def _on_post_tool_call(tool_name: str = "", args: dict = {}, result: str = "", t
     if len(output) > 5000:
         output = output[:5000] + "... (truncated)"
 
-    _relay.send_trace({
-        "type": "tool_result",
-        "toolCallId": tool_name,
-        "output": output,
-        "isError": is_error,
-    })
-    _relay.send_trace({
-        "type": "tool_call",
-        "toolName": tool_name,
-        "toolInput": args or {},
-        "status": "failed" if is_error else "completed",
-    })
+    _relay.send_trace(
+        {
+            "type": "tool_result",
+            "toolCallId": tool_name,
+            "output": output,
+            "isError": is_error,
+        }
+    )
+    _relay.send_trace(
+        {
+            "type": "tool_call",
+            "toolName": tool_name,
+            "toolInput": args or {},
+            "status": "failed" if is_error else "completed",
+        }
+    )
 
 
 def _on_pre_llm_call(user_message: str = "", session_id: str = "", **kwargs):
@@ -715,30 +759,38 @@ def _on_pre_llm_call(user_message: str = "", session_id: str = "", **kwargs):
     if not _relay.connected:
         return
     if user_message:
-        _relay.send_trace({
-            "type": "user_message",
-            "content": user_message,
-        })
-    _relay.send_trace({
-        "type": "status_change",
-        "status": "thinking",
-    })
+        _relay.send_trace(
+            {
+                "type": "user_message",
+                "content": user_message,
+            }
+        )
+    _relay.send_trace(
+        {
+            "type": "status_change",
+            "status": "thinking",
+        }
+    )
 
 
 def _on_post_llm_call(assistant_response: str = "", user_message: str = "", model: str = "", **kwargs):
     if not _relay.connected:
         return
     if assistant_response:
-        _relay.send_trace({
-            "type": "agent_message",
-            "role": "assistant",
-            "content": assistant_response,
-            "model": model or None,
-        })
-    _relay.send_trace({
-        "type": "status_change",
-        "status": "idle",
-    })
+        _relay.send_trace(
+            {
+                "type": "agent_message",
+                "role": "assistant",
+                "content": assistant_response,
+                "model": model or None,
+            }
+        )
+    _relay.send_trace(
+        {
+            "type": "status_change",
+            "status": "idle",
+        }
+    )
 
 
 # ─── Plugin Registration ───────────────────────────────────────────
@@ -836,6 +888,7 @@ def register(ctx):
             return
         try:
             import sys
+
             ct_mod = sys.modules.get("tools.clarify_tool")
             if ct_mod is None:
                 return  # Not loaded yet — will try again next time

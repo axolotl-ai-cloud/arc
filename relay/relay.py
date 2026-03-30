@@ -103,6 +103,7 @@ class RelayConfig:
         )
         app = create_app(config)
     """
+
     auth: AuthProvider
     store: SessionStore
     policy: SessionPolicy
@@ -257,7 +258,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
             MAX_RATE_ENTRIES = 10_000
             if len(_rate_counters) > MAX_RATE_ENTRIES:
                 sorted_keys = sorted(_rate_counters, key=lambda k: _rate_counters[k][-1] if _rate_counters[k] else 0)
-                for k in sorted_keys[:len(_rate_counters) - MAX_RATE_ENTRIES]:
+                for k in sorted_keys[: len(_rate_counters) - MAX_RATE_ENTRIES]:
                     del _rate_counters[k]
 
     @relay_app.on_event("startup")
@@ -271,6 +272,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
         """Redirect root to /viewer if available, else return health."""
         if _web_client_dir:
             from fastapi.responses import RedirectResponse
+
             return RedirectResponse("/viewer")
         total = await config.store.count()
         return {"status": "ok", "sessions": total}
@@ -291,7 +293,8 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
         auth_result = await config.auth.authenticate_admin(token, headers)
         if not auth_result.authenticated:
             return JSONResponse(
-                {"error": auth_result.error or "unauthorized"}, status_code=401,
+                {"error": auth_result.error or "unauthorized"},
+                status_code=401,
             )
 
         # Scope listing: by tenant (hosted), by user_id (beta prefix tokens),
@@ -300,8 +303,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
             all_sessions = await config.store.list_for_tenant(tenant_id=auth_result.tenant_id)
         elif auth_result.user_id:
             all_sessions = [
-                s for s in await config.store.list_for_tenant(tenant_id=None)
-                if s.user_id == auth_result.user_id
+                s for s in await config.store.list_for_tenant(tenant_id=None) if s.user_id == auth_result.user_id
             ]
         else:
             return []
@@ -384,7 +386,8 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                     # Authenticate agent
                     auth_token = envelope.get("token")
                     auth_result = await config.auth.authenticate_agent(
-                        auth_token, ws_headers_dict(ws),
+                        auth_token,
+                        ws_headers_dict(ws),
                     )
                     if not auth_result.authenticated:
                         await ws.send_json({"error": auth_result.error or "unauthorized"})
@@ -416,17 +419,21 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                         role = "agent"
                         authenticated = True
                         bound_session_id = sid
-                        await ws.send_json({
-                            "kind": "registered",
-                            "sessionId": sid,
-                            "sessionSecret": existing.session_secret,  # Reuse original secret!
-                        })
+                        await ws.send_json(
+                            {
+                                "kind": "registered",
+                                "sessionId": sid,
+                                "sessionSecret": existing.session_secret,  # Reuse original secret!
+                            }
+                        )
                         log.info("agent re-registered (takeover): %s", sid)
                         continue
 
                     # Check policy (plan limits, etc.)
                     allowed, deny_reason = await config.policy.can_create_session(
-                        auth_result.user_id, auth_result.tenant_id, auth_result,
+                        auth_result.user_id,
+                        auth_result.tenant_id,
+                        auth_result,
                     )
                     if not allowed:
                         await ws.send_json({"error": deny_reason or "session limit reached"})
@@ -456,16 +463,20 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
 
                     # Notify lifecycle
                     await config.hooks.on_session_created(
-                        sid, auth_result.user_id, auth_result.tenant_id,
+                        sid,
+                        auth_result.user_id,
+                        auth_result.tenant_id,
                         auth_result.metadata,
                     )
 
                     # Return session secret to agent operator
-                    await ws.send_json({
-                        "kind": "registered",
-                        "sessionId": sid,
-                        "sessionSecret": session_secret,
-                    })
+                    await ws.send_json(
+                        {
+                            "kind": "registered",
+                            "sessionId": sid,
+                            "sessionSecret": session_secret,
+                        }
+                    )
                     log.info("agent registered: %s (%s)", sid, session.info.agent_framework)
 
                 # ── Agent sends trace → forward to viewers ──
@@ -495,7 +506,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                         continue
 
                     session.last_activity = time.time()
-                    if hasattr(config.store, 'update_activity'):
+                    if hasattr(config.store, "update_activity"):
                         await config.store.update_activity(sid)
 
                     # Store trace (with size cap)
@@ -505,7 +516,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
 
                     # Forward to viewers — via pub/sub if available (multi-instance),
                     # otherwise direct local forwarding (single-instance / OSS)
-                    if hasattr(config.store, 'publish_trace'):
+                    if hasattr(config.store, "publish_trace"):
                         await config.store.publish_trace(sid, envelope)
                     elif session.viewers:
                         payload = json.dumps(envelope)
@@ -532,9 +543,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                     # not "session not found" which happens during reconnect)
                     sub_key = f"sub:{sid}"
                     now_ts = time.time()
-                    _rate_counters[sub_key] = [
-                        t for t in _rate_counters.get(sub_key, []) if now_ts - t < 300
-                    ]
+                    _rate_counters[sub_key] = [t for t in _rate_counters.get(sub_key, []) if now_ts - t < 300]
                     if len(_rate_counters[sub_key]) >= 30:
                         await ws.send_json({"error": "too many failed subscription attempts"})
                         continue
@@ -548,7 +557,9 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                         continue
 
                     auth_result = await config.auth.authenticate_viewer(
-                        session, viewer_secret, ws_headers_dict(ws),
+                        session,
+                        viewer_secret,
+                        ws_headers_dict(ws),
                     )
                     if not auth_result.authenticated:
                         _rate_counters[sub_key].append(now_ts)
@@ -565,17 +576,19 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                     authenticated = True
                     session.viewers.add(ws)
                     session.last_activity = time.time()
-                    if hasattr(config.store, 'update_activity'):
+                    if hasattr(config.store, "update_activity"):
                         await config.store.update_activity(sid)
                     log.info("viewer subscribed: %s", sid)
 
                     await config.hooks.on_viewer_joined(sid, session.tenant_id, len(session.viewers))
 
                     # Send session info + replay traces
-                    await ws.send_json({
-                        "kind": "register",
-                        "session": session.info.to_dict(),
-                    })
+                    await ws.send_json(
+                        {
+                            "kind": "register",
+                            "session": session.info.to_dict(),
+                        }
+                    )
                     for entry in session.traces:
                         await ws.send_json(entry)
 
@@ -596,7 +609,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                         continue
 
                     session.last_activity = time.time()
-                    if hasattr(config.store, 'update_activity'):
+                    if hasattr(config.store, "update_activity"):
                         await config.store.update_activity(sid)
 
                     # Validate command type (skip for E2E encrypted commands — relay can't read them)
@@ -608,7 +621,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
 
                     # Forward to agent — via pub/sub if available (multi-instance),
                     # otherwise direct local forwarding (single-instance / OSS)
-                    if hasattr(config.store, 'publish_command'):
+                    if hasattr(config.store, "publish_command"):
                         await config.store.publish_command(sid, envelope)
                     else:
                         try:
@@ -633,7 +646,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                     # Clear agent WebSocket but keep session metadata in store
                     # so the secret is preserved for reconnecting viewers.
                     # Only fully remove if the store doesn't support persistence.
-                    if hasattr(config.store, 'publish_trace'):
+                    if hasattr(config.store, "publish_trace"):
                         # Redis store: keep metadata, clear agent_ws from runtime
                         runtime = config.store._runtimes.get(bound_session_id)
                         if runtime:
@@ -643,7 +656,9 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                         await config.store.remove(bound_session_id)
 
                     await config.hooks.on_session_destroyed(
-                        bound_session_id, session.user_id, session.tenant_id,
+                        bound_session_id,
+                        session.user_id,
+                        session.tenant_id,
                         "agent_disconnected",
                     )
 
@@ -659,7 +674,7 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                             "detail": "Agent disconnected",
                         },
                     }
-                    if hasattr(config.store, 'publish_trace'):
+                    if hasattr(config.store, "publish_trace"):
                         await config.store.publish_trace(bound_session_id, disconnect_envelope)
                     else:
                         disconnect_msg = json.dumps(disconnect_envelope)
@@ -674,7 +689,9 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                 if session:
                     session.viewers.discard(ws)
                     await config.hooks.on_viewer_left(
-                        bound_session_id, session.tenant_id, len(session.viewers),
+                        bound_session_id,
+                        session.tenant_id,
+                        len(session.viewers),
                     )
 
     # Mount static web viewer LAST so it doesn't shadow API/WS routes.
@@ -697,14 +714,14 @@ app = create_app()
 
 # ─── CLI entrypoint ─────────────────────────────────────────────────
 
+
 def main():
     import uvicorn
 
     log.info("Starting relay server on :%d", PORT)
     log.info("WebSocket: ws://localhost:%d/ws", PORT)
     log.info("HTTP API:  http://localhost:%d/sessions", PORT)
-    log.info("Max sessions: %d, Max trace log: %d, Session TTL: %dh",
-             MAX_SESSIONS, MAX_TRACE_LOG, SESSION_TTL_HOURS)
+    log.info("Max sessions: %d, Max trace log: %d, Session TTL: %dh", MAX_SESSIONS, MAX_TRACE_LOG, SESSION_TTL_HOURS)
     if _AGENT_TOKEN_GENERATED:
         log.info("=" * 60)
         log.info("  AGENT_TOKEN (auto-generated): %s", AGENT_TOKEN)

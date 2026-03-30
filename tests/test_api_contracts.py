@@ -91,10 +91,15 @@ class TestSessionModelsContract:
     def test_session_fields(self):
         field_names = {f.name for f in fields(Session)}
         expected = {
-            "agent_ws", "info", "session_secret",
-            "user_id", "tenant_id",
-            "created_at", "last_activity",
-            "viewers", "traces",
+            "agent_ws",
+            "info",
+            "session_secret",
+            "user_id",
+            "tenant_id",
+            "created_at",
+            "last_activity",
+            "viewers",
+            "traces",
         }
         assert expected.issubset(field_names)
 
@@ -269,6 +274,7 @@ class TestRelayConfigContract:
     def test_create_app_returns_fastapi(self):
         app = create_app()
         from fastapi import FastAPI
+
         assert isinstance(app, FastAPI)
 
     def test_create_app_stores_config(self):

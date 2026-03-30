@@ -101,9 +101,12 @@ class FakeDatabase:
     async def ensure_tenant(self, tenant_id, created_by=None):
         if tenant_id not in self._tenants:
             self._tenants[tenant_id] = {
-                "id": tenant_id, "plan": "free",
-                "stripe_customer_id": None, "stripe_subscription_id": None,
-                "stripe_sub_item_id": None, "created_by": created_by,
+                "id": tenant_id,
+                "plan": "free",
+                "stripe_customer_id": None,
+                "stripe_subscription_id": None,
+                "stripe_sub_item_id": None,
+                "created_by": created_by,
             }
         return self._tenants[tenant_id]
 
@@ -137,12 +140,17 @@ class FakeDatabase:
     async def create_api_key(self, user_id, tenant_id, name):
         import hashlib
         import secrets
+
         raw = secrets.token_urlsafe(32)
         plaintext = f"ac_{raw}"
         key_hash = hashlib.sha256(plaintext.encode()).hexdigest()
         data = {
-            "key_hash": key_hash, "user_id": user_id, "tenant_id": tenant_id,
-            "name": name, "key_prefix": plaintext[:10], "revoked": False,
+            "key_hash": key_hash,
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "name": name,
+            "key_prefix": plaintext[:10],
+            "revoked": False,
             "last_used_at": None,
         }
         self._api_keys[key_hash] = data
@@ -153,6 +161,7 @@ class FakeDatabase:
         data = self._api_keys.get(key_hash)
         if data:
             import time
+
             data["last_used_at"] = time.time()
         return data
 
@@ -167,16 +176,26 @@ class FakeDatabase:
         data["revoked"] = True
         return True
 
-    async def record_usage_event(self, tenant_id, user_id, session_id, event_type,
-                                  duration_minutes=None, metadata=None):
-        self._usage_events.append({
-            "tenant_id": tenant_id, "event_type": event_type,
-            "duration_minutes": duration_minutes,
-        })
+    async def record_usage_event(
+        self, tenant_id, user_id, session_id, event_type, duration_minutes=None, metadata=None
+    ):
+        self._usage_events.append(
+            {
+                "tenant_id": tenant_id,
+                "event_type": event_type,
+                "duration_minutes": duration_minutes,
+            }
+        )
 
     async def get_usage_stats(self, tenant_id):
-        sessions = sum(1 for e in self._usage_events if e["tenant_id"] == tenant_id and e["event_type"] == "session_created")
-        minutes = sum(e["duration_minutes"] or 0 for e in self._usage_events if e["tenant_id"] == tenant_id and e["event_type"] == "session_destroyed")
+        sessions = sum(
+            1 for e in self._usage_events if e["tenant_id"] == tenant_id and e["event_type"] == "session_created"
+        )
+        minutes = sum(
+            e["duration_minutes"] or 0
+            for e in self._usage_events
+            if e["tenant_id"] == tenant_id and e["event_type"] == "session_destroyed"
+        )
         return {"total_sessions": sessions, "total_minutes": minutes}
 
     async def get_monthly_usage(self, tenant_id):

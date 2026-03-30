@@ -47,15 +47,17 @@ class TokenAuthProvider:
         self._agent_token = agent_token
 
     async def authenticate_agent(
-        self, token: str | None, headers: dict[str, str],
+        self,
+        token: str | None,
+        headers: dict[str, str],
     ) -> AuthResult:
         if not token:
             return AuthResult(authenticated=False, error="agent token required")
 
         # Mode 1: prefix-based tokens (beta)
         if _BETA_PREFIX and token.startswith(_BETA_PREFIX):
-            suffix = token[len(_BETA_PREFIX):]
-            if len(suffix) >= _BETA_MIN_HASH_LEN and re.match(r'^[A-Za-z0-9_-]+$', suffix):
+            suffix = token[len(_BETA_PREFIX) :]
+            if len(suffix) >= _BETA_MIN_HASH_LEN and re.match(r"^[A-Za-z0-9_-]+$", suffix):
                 # Use a hash of the token as user_id for session isolation
                 user_id = hashlib.sha256(token.encode()).hexdigest()[:16]
                 return AuthResult(authenticated=True, user_id=user_id)
@@ -78,7 +80,10 @@ class TokenAuthProvider:
         return AuthResult(authenticated=False, error="invalid agent token")
 
     async def authenticate_viewer(
-        self, session: Session, secret: str | None, headers: dict[str, str],
+        self,
+        session: Session,
+        secret: str | None,
+        headers: dict[str, str],
     ) -> AuthResult:
         if not secret:
             return AuthResult(authenticated=False, error="session secret required")
@@ -87,7 +92,9 @@ class TokenAuthProvider:
         return AuthResult(authenticated=False, error="invalid session secret")
 
     async def authenticate_admin(
-        self, token: str | None, headers: dict[str, str],
+        self,
+        token: str | None,
+        headers: dict[str, str],
     ) -> AuthResult:
         # Admin uses the same agent token in OSS mode
         return await self.authenticate_agent(token, headers)
@@ -126,10 +133,7 @@ class InMemorySessionStore:
 
     async def get_expired(self, ttl_seconds: float) -> list[str]:
         now = time.time()
-        return [
-            sid for sid, s in self._sessions.items()
-            if now - s.last_activity > ttl_seconds
-        ]
+        return [sid for sid, s in self._sessions.items() if now - s.last_activity > ttl_seconds]
 
 
 # ─── Session Policy ─────────────────────────────────────────────────
@@ -143,7 +147,10 @@ class DefaultSessionPolicy:
         self._store = store
 
     async def can_create_session(
-        self, user_id: str | None, tenant_id: str | None, auth_result: AuthResult,
+        self,
+        user_id: str | None,
+        tenant_id: str | None,
+        auth_result: AuthResult,
     ) -> tuple[bool, str | None]:
         total = await self._store.count()
         if total >= self._max_sessions:
@@ -151,7 +158,9 @@ class DefaultSessionPolicy:
         return (True, None)
 
     def max_sessions_for_tenant(
-        self, tenant_id: str | None, auth_result: AuthResult,
+        self,
+        tenant_id: str | None,
+        auth_result: AuthResult,
     ) -> int | None:
         return self._max_sessions
 
@@ -181,11 +190,17 @@ class NoopLifecycleHooks:
         pass
 
     async def on_viewer_joined(
-        self, session_id: str, tenant_id: str | None, viewer_count: int,
+        self,
+        session_id: str,
+        tenant_id: str | None,
+        viewer_count: int,
     ) -> None:
         pass
 
     async def on_viewer_left(
-        self, session_id: str, tenant_id: str | None, viewer_count: int,
+        self,
+        session_id: str,
+        tenant_id: str | None,
+        viewer_count: int,
     ) -> None:
         pass
