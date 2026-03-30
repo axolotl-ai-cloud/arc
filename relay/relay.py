@@ -247,7 +247,10 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                     for s in all_sessions:
                         if s.info.session_id in expired:
                             continue
-                        agent_gone = s.agent_ws.client_state == WebSocketState.DISCONNECTED
+                        agent_gone = (
+                            s.agent_ws is None
+                            or s.agent_ws.client_state == WebSocketState.DISCONNECTED
+                        )
                         if agent_gone and (now - s.last_activity) >= disconnected_ttl:
                             expired.append(s.info.session_id)
                 except Exception as exc:
@@ -256,7 +259,10 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
             for sid in expired:
                 session = await config.store.remove(sid)
                 if session:
-                    agent_gone = session.agent_ws.client_state == WebSocketState.DISCONNECTED
+                    agent_gone = (
+                        session.agent_ws is None
+                        or session.agent_ws.client_state == WebSocketState.DISCONNECTED
+                    )
                     reason = "agent_disconnected" if agent_gone else "expired"
                     log.info("session cleaned up: %s (%s)", sid, reason)
                     await config.hooks.on_session_destroyed(sid, session.user_id, session.tenant_id, reason)
@@ -332,7 +338,10 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
 
         def session_dict(s: Session) -> dict:
             d = s.info.to_dict()
-            d["agentConnected"] = s.agent_ws.client_state != WebSocketState.DISCONNECTED
+            d["agentConnected"] = (
+                s.agent_ws is not None
+                and s.agent_ws.client_state != WebSocketState.DISCONNECTED
+            )
             d["viewerCount"] = len(s.viewers)
             d["lastActivity"] = s.last_activity
             return d
@@ -469,13 +478,19 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                         if existing.user_id is not None and existing.user_id != auth_result.user_id:
                             await ws.send_json({"error": "session owned by another user"})
                             continue
-                        # Reject if the existing agent WS is still connected (true duplicate, not a reconnect)
-                        if existing.agent_ws.client_state == WebSocketState.CONNECTED:
+                        # Reject if the existing agent WS is still connected (true duplicate, not a reconnect).
+                        # agent_ws may be None if the Redis store cleared it after disconnect.
+                        agent_ws_alive = (
+                            existing.agent_ws is not None
+                            and existing.agent_ws.client_state == WebSocketState.CONNECTED
+                        )
+                        if agent_ws_alive:
                             await ws.send_json({"error": f"session '{sid}' already exists"})
                             continue
-                        # Take over: close old agent WS, reuse session secret, keep viewers
+                        # Take over: close old agent WS (if any), reuse session secret, keep viewers
                         try:
-                            await existing.agent_ws.close(code=4010, reason="session taken over by reconnect")
+                            if existing.agent_ws is not None:
+                                await existing.agent_ws.close(code=4010, reason="session taken over by reconnect")
                         except Exception:
                             pass
                         existing.agent_ws = ws
@@ -505,8 +520,14 @@ def create_app(config: RelayConfig | None = None) -> FastAPI:
                         await ws.close(code=4005, reason="session limit reached")
                         return
 
-                    # Create session
-                    session_secret = secrets.token_urlsafe(32)
+                    # Create session — use agent-proposed secret if provided (allows
+                    # viewer URLs to survive relay restarts), otherwise generate one.
+                    proposed_secret = sanitize_string(session_data.get("sessionSecret"), 64)
+                    session_secret = (
+                        proposed_secret
+                        if proposed_secret and len(proposed_secret) >= 16
+                        else secrets.token_urlsafe(32)
+                    )
                     session = Session(
                         agent_ws=ws,
                         info=SessionInfo(

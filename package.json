@@ -19,7 +19,8 @@
     "test:websocket": "python -m pytest tests/test_websocket_relay.py -v",
     "prepare": "husky",
     "lint": "eslint packages/*/src/ && ruff check relay/ tests/",
-    "test:ts": "npm run test:protocol",
+    "test:ts": "npm run test:protocol && npm run test --workspace=packages/web-client",
+    "test:viewer": "npm run test --workspace=packages/web-client",
     "test:py": "npm run test:relay && npm run test:plugin && npm run test:contracts && npm run test:websocket",
     "test": "npm run test:ts && npm run test:py"
   },

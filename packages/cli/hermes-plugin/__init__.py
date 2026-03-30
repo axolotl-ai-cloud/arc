@@ -354,10 +354,16 @@ class ArcRelay:
                 ws.connect(relay_url, timeout=10)
                 self.ws = ws
 
-                # Register — wire protocol field names are fixed
+                # Register — wire protocol field names are fixed.
+                # On reconnect, include the previous session secret so the relay
+                # can reuse it — this keeps existing viewer URLs valid across
+                # relay restarts (relay accepts agent-proposed secrets).
+                session_reg = dict(session_info)
+                if self.viewer_pin:
+                    session_reg["sessionSecret"] = self.viewer_pin
                 register_payload = {
                     "kind": "register",
-                    "session": session_info,
+                    "session": session_reg,
                 }
                 register_payload["to" + "ken"] = agent_passphrase
                 ws.send(json.dumps(register_payload))
@@ -384,7 +390,8 @@ class ArcRelay:
                         log.info("ARC E2E encryption active (AES-256-GCM)")
 
                     self._write_session_files()
-                    self._copy_to_clipboard(self.viewer_url)
+                    if reconnect_attempt == 0:
+                        self._copy_to_clipboard(self.viewer_url)
                     log.info("ARC relay connected: %s", self.viewer_url)
 
                     # Flush any traces buffered while disconnected
@@ -394,7 +401,10 @@ class ArcRelay:
                     self._error = f"Relay registration failed: {err}"
                     log.error("ARC registration failed: %s", err)
                     ws.close()
-                    break  # Don't reconnect on registration failure
+                    # Permanent auth errors — stop reconnecting
+                    err_lower = err.lower()
+                    if "invalid agent token" in err_lower or "agent token required" in err_lower:
+                        break
 
                 # Message loop
                 while not self._stop.is_set():

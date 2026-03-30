@@ -49,6 +49,39 @@ def client(app):
     return TestClient(app)
 
 
+class PersistentInMemorySessionStore(InMemorySessionStore):
+    """InMemorySessionStore that does NOT remove sessions when an agent disconnects.
+
+    The default InMemorySessionStore removes sessions on agent disconnect because
+    it has no persistence layer.  This subclass skips the removal so that the
+    agent-reconnect / takeover code path can be exercised in tests — mimicking
+    how the Redis-backed store behaves in production.
+    """
+
+    async def remove(self, session_id: str) -> None:
+        # Intentionally a no-op: keep the session so a reconnecting agent can
+        # find it (client_state == DISCONNECTED) and trigger the takeover path.
+        pass
+
+
+@pytest.fixture
+def persistent_app():
+    """Relay app whose sessions survive agent disconnect (for takeover tests)."""
+    store = PersistentInMemorySessionStore()
+    config = RelayConfig(
+        auth=TokenAuthProvider(TEST_TOKEN),
+        store=store,
+        policy=DefaultSessionPolicy(100, store),
+        hooks=NoopLifecycleHooks(),
+    )
+    return create_app(config)
+
+
+@pytest.fixture
+def persistent_client(persistent_app):
+    return TestClient(persistent_app)
+
+
 def register_agent(ws, session_id="test-session", token=TEST_TOKEN):
     """Helper: register an agent and return the session secret."""
     ws.send_json(
@@ -707,3 +740,259 @@ class TestErrorHandling:
             ws.send_json({"kind": "hack"})
             resp = ws.receive_json()
             assert "error" in resp
+
+
+# ════════════════════════════════════════════════════════════════════
+# Viewer Reconnect — no trace duplication
+# ════════════════════════════════════════════════════════════════════
+
+
+TRACE_1 = {
+    "kind": "trace",
+    "event": {
+        "id": "evt-rc-1",
+        "sessionId": "rc-session",
+        "timestamp": "2025-01-01T00:00:01Z",
+        "type": "agent_message",
+        "role": "assistant",
+        "content": "First message",
+    },
+}
+TRACE_2 = {
+    "kind": "trace",
+    "event": {
+        "id": "evt-rc-2",
+        "sessionId": "rc-session",
+        "timestamp": "2025-01-01T00:00:02Z",
+        "type": "status_change",
+        "status": "idle",
+    },
+}
+
+
+class TestViewerReconnect:
+    """Viewer reconnect (re-subscribe) must receive each trace exactly once.
+
+    The root cause of the duplication bug: viewer keeps existing React state,
+    then the relay replays stored traces to the reconnecting viewer → duplicates.
+    These tests verify the relay-side contract so the viewer can safely clear
+    and rebuild its trace list from the replay.
+    """
+
+    def test_viewer_reconnect_receives_only_replayed_traces(self, client):
+        """Second viewer subscribe gets traces from relay's buffer — not doubled."""
+        with client.websocket_connect("/ws") as agent:
+            secret = register_agent(agent, session_id="rc-session")
+
+            # Agent sends two traces
+            agent.send_json(TRACE_1)
+            agent.send_json(TRACE_2)
+
+            # First viewer subscribes, drains the replay
+            with client.websocket_connect("/ws") as viewer1:
+                subscribe_viewer(viewer1, "rc-session", secret)
+                r1 = viewer1.receive_json()
+                r2 = viewer1.receive_json()
+                assert r1["event"]["id"] == "evt-rc-1"
+                assert r2["event"]["id"] == "evt-rc-2"
+            # viewer1 disconnects here
+
+            # Second viewer subscribes (simulates reconnect)
+            with client.websocket_connect("/ws") as viewer2:
+                subscribe_viewer(viewer2, "rc-session", secret)
+
+                # Should receive exactly the same two traces from replay
+                replayed1 = viewer2.receive_json()
+                replayed2 = viewer2.receive_json()
+                assert replayed1["event"]["id"] == "evt-rc-1"
+                assert replayed2["event"]["id"] == "evt-rc-2"
+
+                # No third message should be waiting
+                viewer2.send_json({"kind": "ping"})
+                next_msg = viewer2.receive_json()
+                assert next_msg == {"kind": "pong"}, (
+                    f"Expected pong (no extra traces), got: {next_msg}"
+                )
+
+    def test_viewer_reconnect_includes_traces_sent_while_disconnected(self, client):
+        """Traces sent while a viewer was absent are replayed on reconnect."""
+        with client.websocket_connect("/ws") as agent:
+            secret = register_agent(agent, session_id="rc-session")
+
+            # First viewer subscribes, receives trace 1
+            with client.websocket_connect("/ws") as viewer1:
+                subscribe_viewer(viewer1, "rc-session", secret)
+                agent.send_json(TRACE_1)
+                viewer1.receive_json()  # consume trace 1
+            # viewer1 disconnects
+
+            # Agent sends trace 2 while no viewer is connected
+            agent.send_json(TRACE_2)
+
+            # Second viewer subscribes — must see both traces from replay
+            with client.websocket_connect("/ws") as viewer2:
+                subscribe_viewer(viewer2, "rc-session", secret)
+                replayed1 = viewer2.receive_json()
+                replayed2 = viewer2.receive_json()
+                assert replayed1["event"]["id"] == "evt-rc-1"
+                assert replayed2["event"]["id"] == "evt-rc-2"
+
+
+# ════════════════════════════════════════════════════════════════════
+# Agent Reconnect (Takeover)
+# ════════════════════════════════════════════════════════════════════
+
+
+class TestAgentReconnect:
+    """Agent re-registration (takeover) after relay restart or network blip."""
+
+    def test_agent_takeover_preserves_trace_history(self, persistent_client):
+        """When agent reconnects (takeover), existing traces survive for viewer replay."""
+        client = persistent_client
+        with client.websocket_connect("/ws") as agent1:
+            secret = register_agent(agent1, session_id="takeover-session")
+            agent1.send_json({
+                "kind": "trace",
+                "event": {
+                    "id": "pre-disconnect",
+                    "sessionId": "takeover-session",
+                    "timestamp": "2025-01-01T00:00:01Z",
+                    "type": "agent_message",
+                    "role": "assistant",
+                    "content": "Before disconnect",
+                },
+            })
+        # agent1 disconnects (context exits)
+
+        # Agent reconnects using the same session ID (takeover)
+        with client.websocket_connect("/ws") as agent2:
+            agent2.send_json({
+                "kind": "register",
+                "token": TEST_TOKEN,
+                "session": {
+                    "sessionId": "takeover-session",
+                    "agentFramework": "hermes",
+                    "agentName": "test-agent",
+                    "startedAt": "2025-01-01T00:00:00Z",
+                },
+            })
+            resp = agent2.receive_json()
+            assert resp["kind"] == "registered"
+
+            # Agent sends a new trace after reconnect
+            agent2.send_json({
+                "kind": "trace",
+                "event": {
+                    "id": "post-reconnect",
+                    "sessionId": "takeover-session",
+                    "timestamp": "2025-01-01T00:00:02Z",
+                    "type": "agent_message",
+                    "role": "assistant",
+                    "content": "After reconnect",
+                },
+            })
+
+            # A viewer subscribing now should see BOTH traces (pre + post)
+            with client.websocket_connect("/ws") as viewer:
+                subscribe_viewer(viewer, "takeover-session", secret)
+                t1 = viewer.receive_json()
+                t2 = viewer.receive_json()
+                assert t1["event"]["id"] == "pre-disconnect"
+                assert t2["event"]["id"] == "post-reconnect"
+
+    def test_agent_proposed_secret_preserved_on_takeover(self, client):
+        """Relay accepts agent-proposed sessionSecret and returns it on takeover."""
+        proposed_secret = "my-stable-secret-key-123"
+
+        with client.websocket_connect("/ws") as agent1:
+            agent1.send_json({
+                "kind": "register",
+                "token": TEST_TOKEN,
+                "session": {
+                    "sessionId": "secret-session",
+                    "agentFramework": "hermes",
+                    "startedAt": "2025-01-01T00:00:00Z",
+                    "sessionSecret": proposed_secret,
+                },
+            })
+            resp1 = agent1.receive_json()
+            assert resp1["kind"] == "registered"
+            assert resp1["sessionSecret"] == proposed_secret
+        # agent1 disconnects
+
+        # Reconnect with same proposed secret (keeps viewer URLs valid)
+        with client.websocket_connect("/ws") as agent2:
+            agent2.send_json({
+                "kind": "register",
+                "token": TEST_TOKEN,
+                "session": {
+                    "sessionId": "secret-session",
+                    "agentFramework": "hermes",
+                    "startedAt": "2025-01-01T00:00:00Z",
+                    "sessionSecret": proposed_secret,
+                },
+            })
+            resp2 = agent2.receive_json()
+            assert resp2["kind"] == "registered"
+            # Relay must return the ORIGINAL secret (from takeover), not generate a new one
+            assert resp2["sessionSecret"] == proposed_secret
+
+    def test_agent_reconnect_does_not_double_trace_history(self, persistent_client):
+        """Traces in the relay buffer are not duplicated when agent re-registers."""
+        client = persistent_client
+        def make_trace(event_id: str, sid: str) -> dict:
+            return {
+                "kind": "trace",
+                "event": {
+                    "id": event_id,
+                    "sessionId": sid,
+                    "timestamp": "2025-01-01T00:00:01Z",
+                    "type": "status_change",
+                    "status": "idle",
+                },
+            }
+
+        sid = "nodup-session"
+        with client.websocket_connect("/ws") as agent1:
+            secret = register_agent(agent1, session_id=sid)
+            agent1.send_json(make_trace("pre-1", sid))
+            agent1.send_json(make_trace("pre-2", sid))
+        # agent1 disconnects
+
+        # Agent reconnects — a plugin would flush _pending_traces here.
+        # Those pending traces were buffered DURING the disconnect (not before),
+        # so they should not duplicate what's already in relay's history.
+        with client.websocket_connect("/ws") as agent2:
+            agent2.send_json({
+                "kind": "register",
+                "token": TEST_TOKEN,
+                "session": {
+                    "sessionId": sid,
+                    "agentFramework": "hermes",
+                    "agentName": "test-agent",
+                    "startedAt": "2025-01-01T00:00:00Z",
+                },
+            })
+            resp = agent2.receive_json()
+            assert resp["kind"] == "registered"
+
+            # Agent only sends NEW traces (not re-sending pre-disconnect ones)
+            agent2.send_json(make_trace("post-1", sid))
+
+            # Viewer subscribes — should see exactly 3 traces (2 pre + 1 post)
+            with client.websocket_connect("/ws") as viewer:
+                subscribe_viewer(viewer, sid, secret)
+                received = []
+                for _ in range(3):
+                    received.append(viewer.receive_json())
+
+                ids = [r["event"]["id"] for r in received]
+                assert "pre-1" in ids
+                assert "pre-2" in ids
+                assert "post-1" in ids
+                assert len(ids) == len(set(ids)), "Trace IDs must be unique — no duplicates"
+
+                # Confirm no fourth trace is pending
+                viewer.send_json({"kind": "ping"})
+                pong = viewer.receive_json()
+                assert pong == {"kind": "pong"}
