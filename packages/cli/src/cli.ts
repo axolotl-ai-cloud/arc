@@ -292,7 +292,7 @@ async function main(): Promise<void> {
       } else {
         const hints = ["Run `arc sessions --clear` to close all sessions."];
         if (disconnected.length > 0)
-          hints.push(`Or `arc sessions --clear --inactive` to close only the ${disconnected.length} disconnected one(s).`);
+          hints.push("Or `arc sessions --clear --inactive` to close only the " + disconnected.length + " disconnected one(s).");
         console.log(`  ${hints.join("\n  ")}\n`);
       }
       break;
